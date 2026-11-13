@@ -4,12 +4,12 @@ Estado del trabajo al **13 de noviembre de 2026**. Este fichero y `NOTES.md` son
 que necesita una sesión nueva: el asistente no conserva memoria entre chats, y este
 resumen evita tener que releer el historial de la conversación anterior.
 
-**Resumen en una línea:** Copiex funciona de extremo a extremo (bandeja, Nautilus,
-portapapeles, historial, pausa, cancelación, continuación por byte, reanudación
-automática, alerta sonora al terminar y «Eliminar»). Los 11 requerimientos del pliego
-están hechos; solo quedan dos mejoras menores (medir muchos ficheros y tratar «cortar»
-como mover). Los requerimientos de workers se retiraron del pliego el 13/11 y su código
-se eliminó (sección 3 quinquies).
+**Resumen en una línea:** Copiex está terminado: los 11 requerimientos del pliego y los 4
+errores están resueltos (bandeja, extensión de Nautilus, historial SQLite con reanudación
+automática, `menu.yaml` con todos los textos, «Acerca de», alerta sonora propia con botón
+«Eliminar», icono propio y copia optimizada con `copy_file_range`). Solo queda una mejora
+menor: tratar un «cortar» de Nautilus como mover. Los requerimientos de workers se
+retiraron del pliego el 13/11 y su código se eliminó (sección 3 quinquies).
 
 ---
 
@@ -17,9 +17,10 @@ se eliminó (sección 3 quinquies).
 
 Abre el proyecto en Freebuff y pega algo como:
 
-> Lee `TODO.md` y `NOTES.md`. Los 11 requerimientos están hechos: sigue con los
-> pendientes menores de la sección 4 y no cambies nada que ya esté marcado como
-> verificado aquí. Los workers están descartados: no los reintroduzcas.
+> Lee `TODO.md` y `NOTES.md`. Los 11 requerimientos y los 4 errores del pliego ya están
+> cerrados: no rehagas lo ya verificado y, si hay algo nuevo, sigue las reglas de
+> `AGENTS.md` (textos en `menu.yaml`, nombres de fichero en inglés, sin workers, sin
+> `pkill -f`). Lo único pendiente es la sección 4. No hagas commit ni push sin pedírmelo.
 
 La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hechas.
 
@@ -39,16 +40,24 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
 | Arranque de Copiex al pulsar «Copiar con Copiex» | **Hecho el 12/11.** Si no estaba en marcha, se lanza solo en la bandeja (`--bandeja`), sin abrir ventana, en ~0,6 s. |
 | Latencia al pegar | **Medida el 12/11.** Antes 1,57 s en frío y hasta ~4 s con los reintentos ciegos; ahora 0,03 s con la app abierta y 0,49 s en frío. Detalles en 3 ter. |
 | Historial de la base de datos | 23 filas al 13/11 (16 `done`, 4 `error`, 3 `cancelled`), todas copias reales del usuario. Columnas: `id, origenes, destino, total_bytes, copiados_bytes, total_archivos, copiados_archivos, estado, error, creado, actualizado, pausa_manual`. |
+| «Acerca de» + `menu.yaml` (requerimientos 10 y 11) | **Hecho el 13/11.** Acción `app.acerca` con `Adw.AboutDialog` (versión de `copiex/__init__.py` y descripción de `menu.yaml`); menús de ventana, bandeja y Nautilus, y los diálogos de origen/destino, leen sus textos de `menu.yaml` mediante `copiex/menu.py` (lector YAML propio, con caché y valores por defecto). Detalles en 3 decies. |
+| Alerta sonora y «Eliminar» (requerimiento 9) | **Hecho el 13/11.** `copiex/sound.py` reproduce el audio de `sounds/` (manda `copy-finished.*`) una sola vez por copia terminada; «Cancelar» deja paso a «Eliminar», que quita la fila sin borrar el historial. El usuario confirmó que la alarma suena. Detalles en 3 undecies. |
+| Nombres de ficheros y carpetas en inglés | **Hecho el 13/11.** `sound.py`, `watcher.py`, `nautilus_extension.py`, `copiex-launcher`, `sounds/`, `TODO.md`, `NOTES.md`. Los identificadores internos (clases, funciones, atributos) siguen en español a propósito. |
+| Error 3: copias de muchos ficheros | **Medido y mejorado el 13/11.** −20 % de tiempo y −22 % de CPU en 2 000 ficheros de 4 KiB, −14 % en un fichero de 256 MiB: `os.copy_file_range`, un `stat` por fichero al planificar y carpetas memorizadas. Detalles en 3 duodecies. |
+| Bandeja sin ventana abierta | **Corregido el 13/11.** El icono ofrecía «Ocultar ventana» aunque la ventana no existiera; ahora dice «Mostrar ventana» y se refresca al abrir/ocultar. Detalles en 3 terdecies. |
+| Icono propio y cabecera | **Hecho el 13/11.** «C» turquesa con barra de progreso (`icons/`), instalado en el tema `hicolor`; la bandeja usa la variante simbólica y la cabecera lo muestra a 22 px tras «Copiex». Detalles en 3 quaterdecies. |
 
-Lo único **no** comprobado visualmente es el menú desplegado: la sesión es Wayland y no
-hay `xdotool`/`ydotool`, así que no se puede sintetizar un clic derecho. En su lugar se
-verificó el código que devuelve los ítems y su activación, que es lo que Nautilus ejecuta.
+Lo único **no** comprobado visualmente es lo que exige un clic o mirar el panel: el menú
+desplegado de Nautilus (Wayland sin `xdotool`/`ydotool`) y el aspecto del icono en el
+panel, el dock, la cabecera y «Acerca de». En su lugar se verificó el código que devuelve
+los ítems del menú y su activación, los nombres de icono que resuelve el tema y los que la
+bandeja publica por D-Bus.
 
-## 2 bis. Mapa del código (3 051 líneas al 13/11)
+## 2 bis. Mapa del código (3 105 líneas al 13/11)
 
 | Fichero | Líneas | Responsabilidad |
 |---|---|---|
-| `copiex/util.py` | 100 | Rutas (`runtime_dir`, `socket_path`, `data_dir`), URIs ↔ rutas, formatos de tamaño y tiempo, `APP_ID`/`APP_NAME`/`EXTENSION_NAME`. |
+| `copiex/util.py` | 126 | Rutas (`runtime_dir`, `socket_path`, `data_dir`), URIs ↔ rutas, formatos de tamaño y tiempo, `APP_ID`/`APP_NAME`/`EXTENSION_NAME`. |
 | `copiex/logs.py` | 203 | Registro único `copiex.log` en DEBUG con 7 días de retención: poda atómica por fecha y por tamaño (`podar`, `ManejadorSemanal`, `configurar_registro`). |
 | `copiex/engine.py` | 686 | `Operacion` (hilo de copia, pausa, aviso, velocidad, persistencia) y `Motor` (crear, pausar, reanudar, cancelar, historial). Bloques de 1 MiB con `os.copy_file_range` (reserva a lectura/escritura); un `stat` por fichero y carpetas memorizadas; `_copiar_fichero()` reanuda por byte; `_pares()` calcula origen→destino. |
 | `copiex/store.py` | 163 | SQLite en `~/.local/share/copiex/historial.db`: alta, actualización, pendientes y migración de `pausa_manual`. |
@@ -56,11 +65,13 @@ verificó el código que devuelve los ítems y su activación, que es lo que Nau
 | `copiex/menu.py` | 163 | Textos de la interfaz: lector YAML mínimo de `menu.yaml`, con caché y textos por defecto; `texto("menu.nueva")`. |
 | `copiex/sound.py` | 105 | Alerta de fin de copia: reproduce el audio de `sounds/` (o el del sistema) con `canberra-gtk-play`, `paplay` o `gst-launch-1.0`, en segundo plano. |
 | `sounds/` | — | `copy-finished.wav` (alarma por defecto, sustituible) y `README.md` con las reglas de elección del fichero. |
-| `copiex/app.py` | 309 | `Adw.Application`: une motor, ventana, bandeja e IPC; acciones `nueva`/`ocultar`/`acerca`/`salir`; sonido una vez por copia terminada; argumento `--bandeja`. |
-| `copiex/window.py` | 262 | Ventana del historial: fila por copia con barra, velocidad, estado, «Reintentar»/«Cancelar»/«Eliminar»; menú (ocultar/acerca/salir) y botón «Nueva copia». |
-| `copiex/tray.py` | 320 | Icono de bandeja por StatusNotifierItem + D-Bus, sin dependencias; menú contextual. |
+| `copiex/app.py` | 316 | `Adw.Application`: une motor, ventana, bandeja e IPC; acciones `nueva`/`ocultar`/`acerca`/`salir`; sonido una vez por copia terminada; argumento `--bandeja`. |
+| `copiex/window.py` | 272 | Ventana del historial: fila por copia con barra, velocidad, estado, «Reintentar»/«Cancelar»/«Eliminar»; menú (ocultar/acerca/salir) y botón «Nueva copia». |
+| `copiex/tray.py` | 331 | Icono de bandeja por StatusNotifierItem + D-Bus, sin dependencias; menú contextual. |
 | `copiex/ipc.py` | 121 | Socket Unix `$XDG_RUNTIME_DIR/copiex-<uid>/copiex.sock`; JSON por línea (`ping`, `show`, `copy`). |
 | `copiex/nautilus_extension.py` | 540 | Extensión de Nautilus: menú contextual (etiquetas de `menu.yaml`), portapapeles, arranque en bandeja y envío por socket. |
+| `icons/` | — | Icono propio: `com.copiex.Manager.svg` (color) y `com.copiex.Manager-symbolic.svg` (una tinta, para la bandeja). |
+| `brand/` | — | Propuestas de logo descartadas y `preview.html`, la galería con la que se eligió el icono. |
 | `menu.yaml` | 43 | Nombres de las opciones de menú y textos de las ventanas emergentes, incluida la descripción de «Acerca de». |
 | `install.sh`, `uninstall.sh`, `copiex-launcher`, `com.copiex.Manager.desktop.in` | — | Instalación y desinstalación completas (extensión, escritorio, datos), lanzador y entrada de escritorio. |
 
@@ -453,6 +464,32 @@ Comprobado con una app aislada y contra la instancia real por D-Bus (`GetLayout`
 `dbusmenu`): sin ventana, «Mostrar ventana»; al activar el icono, «Ocultar ventana»; al
 volver a ocultarla, «Mostrar ventana».
 
+## 3 quaterdecies. Icono propio (13/11)
+
+Se eligió la propuesta 3 de la galería `brand/preview.html`: una «C» de Copiex sobre fondo
+turquesa con una barra de progreso debajo. Quedó instalado así:
+
+- `icons/com.copiex.Manager.svg`: icono de color, con el mismo nombre que el `application_id`
+  para que lo encuentre el escritorio, el dock y «Acerca de» (`application_icon`).
+- `icons/com.copiex.Manager-symbolic.svg`: versión de una tinta (16×16) para la bandeja.
+  `Bandeja._elegir_icono()` lo usa solo si el tema lo tiene (tras `./install.sh`); si no,
+  cae en `edit-copy` y el icono nunca desaparece.
+- `install.sh` los copia a `~/.local/share/icons/hicolor/scalable/apps`, refresca
+  `gtk-update-icon-cache` y la entrada de escritorio pasa a `Icon=com.copiex.Manager`.
+  `uninstall.sh` los borra y refresca la caché (comprobado con `--simular`).
+- La ventana fija `set_icon_name("com.copiex.Manager")`, muestra el icono (22 px) dentro de
+  la cabecera **justo después del título «Copiex»** (un `Gtk.Image` añadido al
+  `Adw.WindowTitle` dentro de un `Gtk.Box`) y «Acerca de» usa el mismo nombre.
+- `util.icono_disponible()` centraliza la elección con reserva a `edit-copy`; lo usan la
+  cabecera, la bandeja y «Acerca de».
+
+Comprobado: la cabecera muestra `com.copiex.Manager` a 22 px tras «Copiex» y, con
+`XDG_DATA_HOME` temporal (sin los iconos instalados), cae en `edit-copy`; el tema de iconos
+encuentra los dos nombres (`has_icon`), el `IconName` que
+publica la bandeja por D-Bus es `com.copiex.Manager-symbolic` (tooltip incluido), y la app
+rearrancada en bandeja no da errores. El aspecto en el panel y en el dock no se ha podido
+ver desde aquí (Wayland): lo mira el usuario.
+
 ## 4. Pendientes, por orden sugerido
 
 1. *(menor)* Tratar el pegado de un «cortar» (`cut`) como mover, no como copiar.
@@ -469,6 +506,10 @@ volver a ocultarla, «Mostrar ventana».
 - **Arrancar la app:** `./copiex-launcher` o `PYTHONPATH=. python3 -m copiex`.
   Para lanzarla desde un terminal sin que el tool espere 60 s:
   `( setsid nohup ./copiex-launcher >/tmp/copiex-app.log 2>&1 </dev/null & ) >/dev/null 2>&1`
+- **Nombres en inglés:** los ficheros y carpetas del proyecto van en inglés (`sound.py`,
+  `watcher.py`, `nautilus_extension.py`, `copiex-launcher`, `sounds/`); las clases y
+  funciones siguen en español (`Vigilante`, `cargar()`, …). No introduzcas nombres nuevos
+  en español.
 - **Nunca** uses `pkill -f "python3 -m copiex"`: la propia línea de comandos del shell
   contiene ese texto y el comando se mata a sí mismo (pasó en noviembre). Localiza el PID
   con `ps -eo pid,cmd | grep "[p]ython3 -m copiex"` y mátalo por PID.
@@ -484,15 +525,25 @@ volver a ocultarla, «Mostrar ventana».
 - **Probar sin clic derecho:** importar `copiex.nautilus_extension`, instanciar
   `ExtencionCopiex()` y emitir `activate` sobre los ítems de `get_file_items()` /
   `get_background_items()`. Es exactamente lo que hace Nautilus.
+- **Alerta sonora:** `python3 -c "from copiex.sound import fichero, reproducir;
+  print(fichero(), reproducir())"` (suena de verdad). `COPIEX_SOUNDS=/ruta` apunta a otra
+  carpeta de sonidos.
+- **Icono:** `Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).has_icon(...)` para
+  comprobar que el tema lo ve, y `gdbus call --session --dest
+  org.kde.StatusNotifierItem-<pid>-1 --object-path /StatusNotifierItem --method
+  org.freedesktop.DBus.Properties.Get org.kde.StatusNotifierItem IconName` para la
+  bandeja.
 - **Sesión Wayland** con GNOME 50: no hay `xdotool`, `wmctrl` ni `ydotool`; solo `grim`
   para capturas. Para comprobar el menú hace falta un clic derecho humano.
 
 ## 6. Estado del sistema donde se probó
 
 Ubuntu 26.04 «resolute», GNOME 50.1, Nautilus 50.2.2, GTK 4.22.4, PyGObject 3.56.2,
-Wayland. El proyecto **no es un repositorio git**: no hay historial de cambios ni
-posibilidad de revertir, así que conviene copiar los ficheros antes de cambios grandes
-(o plantearse `git init`).
+Wayland. El proyecto **es un repositorio git** (tres commits; remoto `repo-copiex` en
+GitHub). Al cerrar la sesión del 13/11 quedan cambios sin commitear: `icons/` y `brand/`
+son nuevos y hay ficheros modificados. **Aviso de seguridad:** la URL del remoto guarda un
+token de GitHub incrustado en `.git/config`; conviene rotarlo y usar un ayudante de
+credenciales. No hagas commit ni push sin que el usuario lo pida.
 
 ## 7. Recetas de verificación (las que ya se usaron)
 

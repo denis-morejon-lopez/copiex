@@ -8,9 +8,11 @@ from gi.repository import Adw, Gio, GLib, Gtk, Pango
 from .menu import texto
 from .util import (
     APP_NAME,
+    ICONO_APP,
     fmt_bytes,
     fmt_restante,
     fmt_velocidad,
+    icono_disponible,
     resumen_origenes,
     short_path,
 )
@@ -29,6 +31,7 @@ class VentanaCopias(Adw.ApplicationWindow):
             default_height=560,
         )
         self._app = app
+        self.set_icon_name("com.copiex.Manager")
         self._filas = {}  # id de copia -> widgets
         self._eliminadas = set()  # copias quitadas de la pantalla con «Eliminar»
 
@@ -39,9 +42,16 @@ class VentanaCopias(Adw.ApplicationWindow):
         self._overlay.set_child(vista)
 
         cabecera = Adw.HeaderBar()
-        cabecera.set_title_widget(
-            Adw.WindowTitle(title=APP_NAME, subtitle=texto("ventana.subtitulo"))
+        # Título con el icono de Copiex justo después, como pide el usuario.
+        titulo = Adw.WindowTitle(
+            title=APP_NAME, subtitle=texto("ventana.subtitulo")
         )
+        icono = Gtk.Image(icon_name=icono_disponible(ICONO_APP), pixel_size=22)
+        icono.set_valign(Gtk.Align.CENTER)
+        bloque_titulo = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        bloque_titulo.append(titulo)
+        bloque_titulo.append(icono)
+        cabecera.set_title_widget(bloque_titulo)
 
         nueva = Gtk.Button(
             label=texto("menu.nueva"), css_classes=["suggested-action"]

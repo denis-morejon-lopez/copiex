@@ -11,7 +11,10 @@ from __future__ import annotations
 import os
 import traceback
 
+import gi
+
 from .menu import texto
+from .util import ICONO_BANDEJA, icono_disponible
 
 from gi.repository import Gio, GLib
 
@@ -115,6 +118,8 @@ SALIR_ID = 2
 class Bandeja:
     """Icono de bandeja con menú contextual: ocultar ventana / salir."""
 
+    ICONO = ICONO_BANDEJA
+
     def __init__(self, al_pulsar, al_ocultar, al_salir, titulo="Copiex"):
         self._al_pulsar = al_pulsar  # clic izquierdo: mostrar/ocultar
         self._al_ocultar = al_ocultar
@@ -123,6 +128,8 @@ class Bandeja:
         # Al crearse la bandeja todavía no hay ventana: la opción es «Mostrar».
         self._etiqueta = texto("menu.mostrar")
         self._revision = 1
+        # Icono propio si está instalado (./install.sh); si no, el del tema.
+        self._icono = self._elegir_icono()
 
         self.conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         self._nombre = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
@@ -188,6 +195,10 @@ class Bandeja:
         except Exception:
             traceback.print_exc()
 
+    def _elegir_icono(self) -> str:
+        """Icono de la bandeja: el de Copiex si está en el tema, si no el de reserva."""
+        return icono_disponible(self.ICONO)
+
     # ------------------------------------------------------------------
     # org.kde.StatusNotifierItem
     # ------------------------------------------------------------------
@@ -196,7 +207,7 @@ class Bandeja:
             "Category": GLib.Variant("s", "ApplicationStatus"),
             "Id": GLib.Variant("s", "copiex"),
             "Title": GLib.Variant("s", self._titulo),
-            "IconName": GLib.Variant("s", "edit-copy"),
+            "IconName": GLib.Variant("s", self._icono),
             "IconThemePath": GLib.Variant("s", ""),
             "OverlayIconName": GLib.Variant("s", ""),
             "AttentionIconName": GLib.Variant("s", ""),
@@ -205,7 +216,7 @@ class Bandeja:
             "IconPixmap": GLib.Variant("aa(iiay)", []),
             "AttentionIconPixmap": GLib.Variant("aa(iiay)", []),
             "OverlayIconPixmap": GLib.Variant("aa(iiay)", []),
-            "ToolTip": GLib.Variant("(sa(iiay)ss)", ("edit-copy", [], self._titulo,
+            "ToolTip": GLib.Variant("(sa(iiay)ss)", (self._icono, [], self._titulo,
                                                       "Copiex para Nautilus")),
             "Menu": GLib.Variant("o", "/MenuBar"),
             "ContextMenu": GLib.Variant("o", "/MenuBar"),

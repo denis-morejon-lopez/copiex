@@ -21,7 +21,14 @@ from .sound import reproducir  # noqa: E402
 from .logs import configurar_registro  # noqa: E402
 from .store import Store  # noqa: E402
 from .tray import Bandeja  # noqa: E402
-from .util import APP_ID, APP_NAME, socket_path, uri_to_path  # noqa: E402
+from .util import (  # noqa: E402
+    APP_ID,
+    APP_NAME,
+    ICONO_APP,
+    icono_disponible,
+    socket_path,
+    uri_to_path,
+)
 from .watcher import Vigilante  # noqa: E402
 from .window import VentanaCopias  # noqa: E402
 
@@ -245,7 +252,7 @@ class Aplicacion(Adw.Application):
         """«Acerca de»: descripción corta y versión (requerimiento 10)."""
         dialogo = Adw.AboutDialog(
             application_name=APP_NAME,
-            application_icon="edit-copy",
+            application_icon=icono_disponible(ICONO_APP),
             version=__version__,
             comments=texto("aplicacion.descripcion"),
         )

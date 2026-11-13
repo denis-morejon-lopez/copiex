@@ -36,6 +36,7 @@ done
 
 EXTENSIONES="$HOME/.local/share/nautilus-python/extensions"
 APLICACIONES="$HOME/.local/share/applications"
+ICONOS="$HOME/.local/share/icons/hicolor/scalable/apps"
 DATOS="$HOME/.local/share/copiex"
 CONFIG="$HOME/.config/copiex"
 AUTOSTART="$HOME/.config/autostart/com.copiex.Manager.desktop"
@@ -83,6 +84,7 @@ parar_aplicacion() {
 echo "Se va a desinstalar Copiex:"
 echo "  extensión:  $EXTENSIONES/copiex.py"
 echo "  escritorio: $APLICACIONES/com.copiex.Manager.desktop"
+echo "  iconos:     $ICONOS/com.copiex.Manager.svg"
 echo "  socket:     $RUNTIME"
 if [ "$CONSERVAR" -eq 1 ]; then
     echo "  datos:      se CONSERVAN ($DATOS)"
@@ -114,6 +116,8 @@ if [ "$SIMULAR" -eq 0 ]; then
     rmdir "$EXTENSIONES/__pycache__" 2>/dev/null || true
 fi
 borrar "$APLICACIONES/com.copiex.Manager.desktop"
+borrar "$ICONOS/com.copiex.Manager.svg"
+borrar "$ICONOS/com.copiex.Manager-symbolic.svg"
 borrar "$AUTOSTART"
 borrar "$RUNTIME"
 if [ "$CONSERVAR" -eq 1 ]; then
@@ -126,6 +130,10 @@ borrar "$CONFIG"
 if [ "$SIMULAR" -eq 0 ]; then
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database "$APLICACIONES" >/dev/null 2>&1 || true
+    fi
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" \
+            >/dev/null 2>&1 || true
     fi
     # Nautilus guarda las extensiones en memoria: sin reiniciarlo, los menús
     # «Copiar/Pegar con Copiex» seguirían apareciendo hasta cerrar el gestor.

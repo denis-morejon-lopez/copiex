@@ -7,6 +7,7 @@ set -eu
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APLICACIONES="$HOME/.local/share/applications"
 EXTENSIONES="$HOME/.local/share/nautilus-python/extensions"
+ICONOS="$HOME/.local/share/icons/hicolor/scalable/apps"
 
 # 0) el script tiene que seguir viviendo junto al proyecto
 if [ ! -f "$DIR/copiex/nautilus_extension.py" ] || [ ! -f "$DIR/copiex-launcher" ]; then
@@ -45,7 +46,7 @@ if [ -n "$FALTAN" ]; then
     echo "       Instálalas con:  sudo apt install $FALTAN" >&2
 fi
 
-mkdir -p "$APLICACIONES" "$EXTENSIONES"
+mkdir -p "$APLICACIONES" "$EXTENSIONES" "$ICONOS"
 chmod +x "$DIR/copiex-launcher"
 
 # 1) entrada de escritorio con la ruta absoluta al lanzador
@@ -57,6 +58,14 @@ command -v gio >/dev/null 2>&1 \
         >/dev/null 2>&1 || true
 command -v update-desktop-database >/dev/null 2>&1 \
     && update-desktop-database "$APLICACIONES" >/dev/null 2>&1 || true
+
+# 1 bis) iconos: el de la aplicación (escritorio, ventana, «Acerca de») y el
+# simbólico de una tinta que usa la bandeja.
+cp "$DIR/icons/com.copiex.Manager.svg" \
+   "$DIR/icons/com.copiex.Manager-symbolic.svg" "$ICONOS/"
+command -v gtk-update-icon-cache >/dev/null 2>&1 \
+    && gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" \
+        >/dev/null 2>&1 || true
 
 # 2) extensión de Nautilus
 cp "$DIR/copiex/nautilus_extension.py" "$EXTENSIONES/copiex.py"
@@ -70,6 +79,7 @@ echo "Copiex instalado:"
 echo "  lanzador:   $DIR/copiex-launcher"
 echo "  escritorio: $APLICACIONES/com.copiex.Manager.desktop"
 echo "  extensión:  $EXTENSIONES/copiex.py"
+echo "  iconos:     $ICONOS/com.copiex.Manager.svg"
 
 # 3) comprobación de la extensión de Nautilus (única dependencia de sistema).
 #    Ubuntu 24.04 trae la API 4.0 (Nautilus 46) y Ubuntu 26.04 la 4.1

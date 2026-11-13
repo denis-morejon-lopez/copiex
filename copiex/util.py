@@ -11,6 +11,32 @@ APP_ID = "com.copiex.Manager"
 APP_NAME = "Copiex"
 EXTENSION_NAME = "copiex.py"
 
+ICONO_APP = "com.copiex.Manager"
+ICONO_BANDEJA = "com.copiex.Manager-symbolic"
+ICONO_RESERVA = "edit-copy"
+
+
+def icono_disponible(nombre: str) -> str:
+    """Devuelve `nombre` si el tema de iconos lo tiene; si no, el de reserva.
+
+    Los iconos propios los instala ./install.sh en ~/.local/share/icons. Si la app
+    se ejecuta sin instalar, se usa el icono genérico del tema y no queda un
+    hueco vacío.
+    """
+    try:
+        import gi
+
+        gi.require_version("Gtk", "4.0")
+        from gi.repository import Gdk, Gtk
+
+        display = Gdk.Display.get_default()
+        if display is not None:
+            if Gtk.IconTheme.get_for_display(display).has_icon(nombre):
+                return nombre
+    except Exception:
+        pass  # sin GTK o sin tema, se usa el de reserva
+    return ICONO_RESERVA
+
 
 def runtime_dir() -> str:
     """Directorio privado del usuario para el socket IPC."""

@@ -2,7 +2,9 @@
 
 Gestor de copias en Python + PyGObject (GTK 4 / libadwaita) para GNOME: icono de bandeja,
 extensión de Nautilus, historial en SQLite, pausa/cancelación, continuación por byte y
-reanudación automática.
+reanudación automática. **Los ficheros y carpetas llevan nombres en inglés** (`sound.py`,
+`watcher.py`, `nautilus_extension.py`, `copiex-launcher`, `sounds/`, `icons/`); las clases,
+funciones y atributos internos siguen en español (`Vigilante`, `cargar()`, `texto()`).
 
 **Antes de tocar nada, lee `TODO.md`** (estado real, requerimiento por requerimiento,
 trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 11 requerimientos y 4 errores;
@@ -35,8 +37,9 @@ mejorado. Queda una mejora menor:
   `ps -eo pid,args | grep "[p]ython3 -m copiex"` y mátalo por PID.
 - Prueba siempre con base de datos y `XDG_CONFIG_HOME` temporales en `/tmp`; no toques el
   historial real de `~/.local/share/copiex/historial.db`.
-- El proyecto **no es un repositorio git**: no hay red de seguridad, copia ficheros antes de
-  cambios grandes.
+- **Git:** el proyecto tiene repositorio (remoto `repo-copiex` en GitHub). **No hagas
+  commit ni push** salvo que el usuario lo pida; y avísale de que la URL del remoto lleva un
+  token incrustado en `.git/config`, que debería rotar.
 
 ## Diagnóstico
 
@@ -70,11 +73,23 @@ Lanzar la GUI desde un terminal sin bloquear:
 
 ## Mapa rápido
 
+- `menu.yaml` + `copiex/menu.py`: todos los textos de menús y ventanas emergentes (lector
+  YAML propio con caché y reserva). Cambiar el YAML exige reiniciar la app.
+- `sounds/`: audio de la alarma (`copy-finished.*` manda) y `README.md` con las reglas;
+  `copiex/sound.py` lo reproduce. Cambiar el sonido no exige reiniciar.
+- `icons/`: icono propio y variante simbólica. `brand/`: propuestas descartadas y la
+  galería `preview.html` con la que se eligió.
+- `copiex/window.py`: además del historial, la cabecera lleva el icono a 22 px justo
+  después del título «Copiex» (`Gtk.Box` con `Adw.WindowTitle` + `Gtk.Image`).
+- `copiex/util.py`: rutas y `icono_disponible()` (icono propio o `edit-copy`).
 - `copiex/engine.py`: motor de copia (`Operacion`, `Motor`), bloques de 1 MiB con
   `os.copy_file_range` (reserva a lectura/escritura si el sistema de ficheros no lo
   admite), continuación por byte.
 - `copiex/store.py`: SQLite del historial. `copiex/watcher.py`: reanudación automática cada 6 s.
 - `copiex/app.py` + `copiex/window.py`: aplicación y ventana del historial.
+- `icons/`: icono propio (`com.copiex.Manager.svg` y la variante `-symbolic` que usa la
+  bandeja). Lo instala `./install.sh` en el tema `hicolor`; si no está, la bandeja cae en
+  `edit-copy`. Las propuestas descartadas viven en `brand/`.
 - `copiex/sound.py`: alerta de fin de copia. El audio está en `sounds/` (manda
   `copy-finished.*`; si no, el primer audio de la carpeta): para cambiar la alarma se
   sustituye ese fichero, no el código. «Eliminar» solo oculta la fila, nunca borra el
