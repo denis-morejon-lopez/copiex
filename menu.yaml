@@ -1,0 +1,42 @@
+# Textos de Copiex (requerimientos 10 y 11 del pliego).
+#
+# Aquí viven los nombres de las opciones de menú y los textos de las ventanas
+# emergentes, incluida la descripción que aparece en «Acerca de».
+#
+# Formato: YAML sencillo, sin listas ni bloques multilínea. Cada nivel se
+# indenta con dos espacios y cada valor va en una sola línea (se puede entrecomillar
+# si contiene «:» o almohadillas). `copiex/menu.py` lo lee sin dependencias
+# externas; si el fichero falta o una clave no está, se usan los textos por
+# defecto que hay en ese módulo. Los cambios se aplican al reiniciar Copiex.
+
+aplicacion:
+  nombre: Copiex
+  descripcion: Copia ficheros y carpetas con cola propia, progreso, pausa y reanudación, integrada en Nautilus. Las copias siguen solas tras cerrar la aplicación o desconectar un dispositivo.
+
+menu:
+  nueva: Nueva copia
+  ocultar: Ocultar ventana
+  mostrar: Mostrar ventana
+  acerca: Acerca de
+  salir: Salir
+
+ventana:
+  subtitulo: Historial de copias
+  vacio_titulo: Todavía no hay copias
+  vacio_descripcion: Pulsa «Nueva copia» aquí, o copia en Nautilus y usa «Pegar con Copiex» en la carpeta de destino.
+
+acciones:
+  pausar: Pausar
+  reanudar: Reanudar
+  reintentar: Reintentar
+  cancelar: Cancelar
+
+dialogos:
+  origen_titulo: ¿Qué quieres copiar?
+  destino_titulo: ¿Dónde quieres copiarlo?
+
+nautilus:
+  copiar: Copiar con Copiex
+  pegar: Pegar con Copiex
+  copiar_ayuda: Marca estos elementos para copiarlos con Copiex
+  pegar_ayuda: Copia aquí lo marcado con Copiex (o el portapapeles) con progreso, pausa y reanudación

@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS copias (
     copiados_archivos INTEGER NOT NULL DEFAULT 0,
     estado          TEXT    NOT NULL,
     error           TEXT,
+    pausa_manual    INTEGER NOT NULL DEFAULT 0,
     creado          REAL    NOT NULL,
     actualizado     REAL    NOT NULL
 );
@@ -54,7 +55,16 @@ class Store:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA busy_timeout=5000")
             self._conn.executescript(_ESQUEMA)
+            self._migrar()
             self._conn.commit()
+
+    def _migrar(self):
+        """Añade columnas nuevas a historiales creados por versiones anteriores."""
+        columnas = {f[1] for f in self._conn.execute("PRAGMA table_info(copias)")}
+        if "pausa_manual" not in columnas:
+            self._conn.execute(
+                "ALTER TABLE copias ADD COLUMN pausa_manual INTEGER NOT NULL DEFAULT 0"
+            )
 
     # ------------------------------------------------------------------
     def crear(self, origenes, destino) -> int:
@@ -94,13 +104,20 @@ class Store:
             )
             self._conn.commit()
 
-    def marcar(self, op_id, estado, error=None):
+    def marcar(self, op_id, estado, error=None, manual=None):
+        """Actualiza el estado. Con `manual` se guarda si la pausa la pidió el
+        usuario (no debe reanudarse sola) o si vino de un cierre o un fallo."""
         if estado not in ESTADOS:
             raise ValueError(f"Estado desconocido: {estado}")
+        campos = ["estado = ?", "error = ?", "actualizado = ?"]
+        valores = [estado, error, time.time()]
+        if manual is not None:
+            campos.append("pausa_manual = ?")
+            valores.append(1 if manual else 0)
+        valores.append(op_id)
         with self._lock:
             self._conn.execute(
-                "UPDATE copias SET estado = ?, error = ?, actualizado = ? WHERE id = ?",
-                (estado, error, time.time(), op_id),
+                f"UPDATE copias SET {', '.join(campos)} WHERE id = ?", valores
             )
             self._conn.commit()
 

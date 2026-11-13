@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import threading
-import traceback
 
 MAX_LINEA = 1 << 20  # 1 MiB por mensaje
+
+log = logging.getLogger(__name__)
 
 
 class ServidorIpc(threading.Thread):
@@ -50,7 +52,7 @@ class ServidorIpc(threading.Thread):
                     break
                 self._atender(conexion)
         except Exception:
-            traceback.print_exc()
+            log.exception("IPC: el servidor se detuvo")
         finally:
             self.cerrar()
 
@@ -70,9 +72,10 @@ class ServidorIpc(threading.Thread):
                 mensaje = json.loads(texto)
                 if not isinstance(mensaje, dict):
                     raise ValueError("mensaje no es un objeto JSON")
+                log.debug("IPC recibido: %s", texto[:500])
                 respuesta = self.manejador(mensaje) or {"ok": True}
             except Exception as exc:
-                traceback.print_exc()
+                log.exception("IPC: mensaje no atendido")
                 respuesta = {"ok": False, "error": str(exc)}
             try:
                 conexion.sendall(

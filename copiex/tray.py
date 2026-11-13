@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 import traceback
 
+from .menu import texto
+
 from gi.repository import Gio, GLib
 
 SNI_XML = """
@@ -118,7 +120,7 @@ class Bandeja:
         self._al_ocultar = al_ocultar
         self._al_salir = al_salir
         self._titulo = titulo
-        self._etiqueta = "Ocultar ventana"
+        self._etiqueta = texto("menu.ocultar")
         self._revision = 1
 
         self.conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -224,7 +226,7 @@ class Bandeja:
     def _items(self):
         return {
             OCULTAR_ID: {"label": GLib.Variant("s", self._etiqueta)},
-            SALIR_ID: {"label": GLib.Variant("s", "Salir")},
+            SALIR_ID: {"label": GLib.Variant("s", texto("menu.salir"))},
         }
 
     def _estructura(self, item_id) -> tuple:

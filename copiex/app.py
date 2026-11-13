@@ -14,10 +14,14 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 from .engine import ErrorCopia, Motor  # noqa: E402
+from . import __version__  # noqa: E402
 from .ipc import ServidorIpc  # noqa: E402
+from .menu import texto  # noqa: E402
+from .logs import configurar_registro  # noqa: E402
 from .store import Store  # noqa: E402
 from .tray import Bandeja  # noqa: E402
-from .util import APP_ID, socket_path, uri_to_path  # noqa: E402
+from .util import APP_ID, APP_NAME, socket_path, uri_to_path  # noqa: E402
+from .vigilante import Vigilante  # noqa: E402
 from .window import VentanaCopias  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -25,18 +29,21 @@ log = logging.getLogger(__name__)
 
 class Aplicacion(Adw.Application):
     def __init__(self, *, application_id=APP_ID, db_ruta=None,
-                 activar_bandeja=True, activar_ipc=True):
+                 activar_bandeja=True, activar_ipc=True, iniciar_oculto=False):
         super().__init__(
             application_id=application_id, flags=Gio.ApplicationFlags.DEFAULT_FLAGS
         )
         self.db_ruta = db_ruta
         self.activar_bandeja = activar_bandeja
         self.activar_ipc = activar_ipc
+        # Arranque pedido desde Nautilus: solo bandeja, sin ventana delante.
+        self._iniciar_oculto = iniciar_oculto
         self.store = None
         self.motor = None
         self.ventana = None
         self.ipc = None
         self.bandeja = None
+        self.vigilante = None
 
     # ------------------------------------------------------------------
     def do_startup(self):
@@ -50,9 +57,17 @@ class Aplicacion(Adw.Application):
         if recuperadas:
             log.info("%d copia(s) en pausa recuperadas del historial", len(recuperadas))
 
+        # Reanuda sola las copias que quedaron a medias o fallaron por un
+        # dispositivo ausente (nunca las que el usuario pausó a mano).
+        self.vigilante = Vigilante(
+            self.motor, lambda op: GLib.idle_add(self._aplicar_reanudacion, op.id)
+        )
+        self.vigilante.start()
+
         for nombre, metodo in (
             ("nueva", self.pedir_nueva_copia),
             ("ocultar", self.ocultar_ventana),
+            ("acerca", self.acerca),
             ("salir", self.salir),
         ):
             accion = Gio.SimpleAction.new(nombre, None)
@@ -62,6 +77,7 @@ class Aplicacion(Adw.Application):
         if self.activar_ipc:
             self.ipc = ServidorIpc(socket_path(), self._mensaje_ipc)
             self.ipc.start()
+            log.info("IPC escuchando en %s", socket_path())
 
         if self.activar_bandeja:
             try:
@@ -76,10 +92,15 @@ class Aplicacion(Adw.Application):
                 self.bandeja = None
 
     def do_activate(self, *_args):
+        if self._iniciar_oculto:
+            self._iniciar_oculto = False
+            log.info("Arranque en bandeja (sin ventana)")
+            return
         if self.ventana is None:
             self.ventana = VentanaCopias(self)
             self.ventana.connect("notify::visible", self._visibilidad_cambiada)
             self.ventana.sincronizar(self.motor.todas())
+        log.debug("ventana mostrada")
         self.ventana.present()
         self._visibilidad_cambiada()
 
@@ -95,6 +116,9 @@ class Aplicacion(Adw.Application):
             if self.ventana is not None:
                 self.ventana.aviso(str(exc))
             return None
+        log.info("Copia id=%s creada en la cola: %s -> %s", op.id, origenes, destino)
+        if mostrar and self.ventana is None:
+            self.do_activate()  # la tarea tiene que verse: se abre la ventana
         if self.ventana is not None:
             self.ventana.sincronizar(self.motor.todas())
             if mostrar:
@@ -104,7 +128,7 @@ class Aplicacion(Adw.Application):
     def pedir_nueva_copia(self):
         if self.ventana is None:
             self.do_activate()
-        dialogo = Gtk.FileDialog(title="¿Qué quieres copiar?")
+        dialogo = Gtk.FileDialog(title=texto("dialogos.origen_titulo"))
         dialogo.open_multiple(self.ventana, None, self._origenes_elegidos)
 
     def _origenes_elegidos(self, dialogo, resultado, *_):
@@ -120,7 +144,7 @@ class Aplicacion(Adw.Application):
                 origenes.append(ruta)
         if not origenes:
             return
-        dialogo2 = Gtk.FileDialog(title="¿Dónde quieres copiarlo?")
+        dialogo2 = Gtk.FileDialog(title=texto("dialogos.destino_titulo"))
         dialogo2.select_folder(
             self.ventana, None, lambda d, r, o=origenes: self._destino_elegido(o, d, r)
         )
@@ -149,12 +173,21 @@ class Aplicacion(Adw.Application):
     # ------------------------------------------------------------------
     def _mensaje_ipc(self, mensaje):
         comando = mensaje.get("cmd")
+        if comando == "log":
+            # La extensión de Nautilus no tiene dónde escribir: sus trazas se
+            # recogen aquí para que todo quede en el mismo copiex.log.
+            texto = str(mensaje.get("texto") or "").strip()[:1000]
+            if texto:
+                log.info("Nautilus: %s", texto)
+            return {"ok": True}
+        log.debug("IPC: %s", mensaje)
         if comando == "ping":
             return {"ok": True, "pid": os.getpid()}
         if comando == "show":
             GLib.idle_add(self.mostrar_ventana)
             return {"ok": True}
         if comando == "copy":
+            log.info("Petición de copia desde Nautilus: %s", mensaje.get("sources"))
             try:
                 origenes = [uri_to_path(u) for u in (mensaje.get("sources") or [])]
                 destino = uri_to_path(mensaje.get("dest") or "")
@@ -179,6 +212,17 @@ class Aplicacion(Adw.Application):
         return False
 
     # ------------------------------------------------------------------
+    # reanudación automática
+    # ------------------------------------------------------------------
+    def _aplicar_reanudacion(self, op_id):
+        """Reanuda en el hilo de GTK la copia que pide el vigilante."""
+        if self.motor.reanudar(op_id):
+            log.info("Copia %s reanudada automáticamente", op_id)
+            if self.ventana is not None:
+                self.ventana.sincronizar(self.motor.todas())
+        return False
+
+    # ------------------------------------------------------------------
     # ventana y bandeja
     # ------------------------------------------------------------------
     def mostrar_ventana(self):
@@ -189,6 +233,17 @@ class Aplicacion(Adw.Application):
         if self.ventana is not None:
             self.ventana.hide()
         return False
+
+    def acerca(self, *_args):
+        """«Acerca de»: descripción corta y versión (requerimiento 10)."""
+        dialogo = Adw.AboutDialog(
+            application_name=APP_NAME,
+            application_icon="edit-copy",
+            version=__version__,
+            comments=texto("aplicacion.descripcion"),
+        )
+        dialogo.present(self.ventana)
+        log.debug("mostrado «Acerca de» (versión %s)", __version__)
 
     def alternar_ventana(self):
         if self.ventana is None or not self.ventana.get_visible():
@@ -201,13 +256,15 @@ class Aplicacion(Adw.Application):
             return
         visible = self.ventana.get_visible()
         self.bandeja.cambiar_etiqueta(
-            "Ocultar ventana" if visible else "Mostrar ventana"
+            texto("menu.ocultar") if visible else texto("menu.mostrar")
         )
 
     # ------------------------------------------------------------------
     def salir(self, *_args):
         log.info("Saliendo: se pausan las copias en curso")
         try:
+            if self.vigilante is not None:
+                self.vigilante.detener()
             if self.motor is not None:
                 self.motor.apagar(2.0)
             if self.ipc is not None:
@@ -222,8 +279,22 @@ class Aplicacion(Adw.Application):
 
 
 def main(argv=None):
-    logging.basicConfig(
-        level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
+    argv = list(argv if argv is not None else sys.argv)
+    iniciar_oculto = "--bandeja" in argv
+    argv = [a for a in argv if a != "--bandeja"]
+    # Un único copiex.log en DEBUG con una semana de historial: es el fichero
+    # que hay que enviar si algo va mal (poda y tamaño se cuidan en logs.py).
+    try:
+        ruta_log = configurar_registro()
+    except Exception:  # sin registro se sigue funcionando igual
+        logging.getLogger(__name__).warning("No se pudo abrir el registro en disco")
+        ruta_log = "(sin fichero)"
+    log.info(
+        "Copiex %s arranca (pid %s, %s) — registro en %s",
+        __version__,
+        os.getpid(),
+        "bandeja" if iniciar_oculto else "ventana",
+        ruta_log,
     )
-    app = Aplicacion()
+    app = Aplicacion(iniciar_oculto=iniciar_oculto)
     return app.run(argv or sys.argv)

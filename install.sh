@@ -8,6 +8,43 @@ DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APLICACIONES="$HOME/.local/share/applications"
 EXTENSIONES="$HOME/.local/share/nautilus-python/extensions"
 
+# 0) el script tiene que seguir viviendo junto al proyecto
+if [ ! -f "$DIR/copiex/extencion_nautilus.py" ] || [ ! -f "$DIR/copiex-lanzador" ]; then
+    echo "ERROR: no encuentro el proyecto Copiex junto a este script." >&2
+    echo "       Ejecútalo desde la carpeta del proyecto: ./install.sh" >&2
+    exit 1
+fi
+
+# 0 bis) dependencias de ejecución: sin PyGObject, GTK 4 y libadwaita la
+# aplicación no arranca, y es mejor decirlo aquí que al hacer doble clic.
+FALTAN=$(
+    python3 - 2>/dev/null <<'PY' || echo "python3"
+import sys
+
+paquetes = []
+try:
+    import gi
+except Exception:
+    print("python3-gi")
+    sys.exit(0)
+
+for espacio, version, paquete in (
+    ("Gtk", "4.0", "gir1.2-gtk-4.0"),
+    ("Adw", "1", "gir1.2-adw-1"),
+):
+    try:
+        gi.require_version(espacio, version)
+        __import__(f"gi.repository.{espacio}", fromlist=[espacio])
+    except Exception:
+        paquetes.append(paquete)
+print(" ".join(paquetes))
+PY
+)
+if [ -n "$FALTAN" ]; then
+    echo "AVISO: faltan dependencias para ejecutar Copiex: $FALTAN" >&2
+    echo "       Instálalas con:  sudo apt install $FALTAN" >&2
+fi
+
 mkdir -p "$APLICACIONES" "$EXTENSIONES"
 chmod +x "$DIR/copiex-lanzador"
 
@@ -23,6 +60,11 @@ command -v update-desktop-database >/dev/null 2>&1 \
 
 # 2) extensión de Nautilus
 cp "$DIR/copiex/extencion_nautilus.py" "$EXTENSIONES/copiex.py"
+
+if ! cmp -s "$DIR/copiex/extencion_nautilus.py" "$EXTENSIONES/copiex.py"; then
+    echo "ERROR: la extensión copiada no coincide con la del proyecto." >&2
+    exit 1
+fi
 
 echo "Copiex instalado:"
 echo "  lanzador:   $DIR/copiex-lanzador"
@@ -59,3 +101,13 @@ else
     echo "API de Nautilus disponible: $VERSION_NAUTILUS"
     echo "Reinicia Nautilus para cargar la extensión:  nautilus -q"
 fi
+
+# 4) si la aplicación ya estaba abierta, sigue con el código anterior en memoria
+if ps -eo pid=,args= \
+        | awk '$2=="python3" && $3=="-m" && $4=="copiex" {visto=1} END {exit !visto}'
+then
+    echo "Copiex está en marcha: ciérralo y vuelve a abrirlo para estrenar los cambios."
+fi
+
+echo
+echo "Para desinstalarlo por completo:  ./uninstall.sh"

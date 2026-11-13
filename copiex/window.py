@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
+from .menu import texto
 from .util import (
     APP_NAME,
     fmt_bytes,
@@ -38,17 +39,20 @@ class VentanaCopias(Adw.ApplicationWindow):
 
         cabecera = Adw.HeaderBar()
         cabecera.set_title_widget(
-            Adw.WindowTitle(title=APP_NAME, subtitle="Historial de copias")
+            Adw.WindowTitle(title=APP_NAME, subtitle=texto("ventana.subtitulo"))
         )
 
-        nueva = Gtk.Button(label="Nueva copia", css_classes=["suggested-action"])
+        nueva = Gtk.Button(
+            label=texto("menu.nueva"), css_classes=["suggested-action"]
+        )
         nueva.connect("clicked", lambda *_: app.pedir_nueva_copia())
         cabecera.pack_start(nueva)
 
         menu = Gtk.MenuButton(icon_name="open-menu-symbolic")
         modelo = Gio.Menu()
-        modelo.append("Ocultar ventana", "app.ocultar")
-        modelo.append("Salir", "app.salir")
+        modelo.append(texto("menu.ocultar"), "app.ocultar")
+        modelo.append(texto("menu.acerca"), "app.acerca")
+        modelo.append(texto("menu.salir"), "app.salir")
         menu.set_menu_model(modelo)
         cabecera.pack_end(menu)
         vista.add_top_bar(cabecera)
@@ -59,11 +63,8 @@ class VentanaCopias(Adw.ApplicationWindow):
 
         self._vacio = Adw.StatusPage(
             icon_name="edit-copy",
-            title="Todavía no hay copias",
-            description=(
-                "Pulsa «Nueva copia» aquí, o copia en Nautilus y usa\n"
-                "«Pegar con el Copiex» en la carpeta de destino."
-            ),
+            title=texto("ventana.vacio_titulo"),
+            description=texto("ventana.vacio_descripcion"),
         )
         contenedor.append(self._vacio)
 
@@ -146,9 +147,11 @@ class VentanaCopias(Adw.ApplicationWindow):
             spacing=6,
             valign=Gtk.Align.CENTER,
         )
-        btn_pausa = Gtk.Button(label="Pausar")
+        btn_pausa = Gtk.Button(label=texto("acciones.pausar"))
         btn_pausa.connect("clicked", self._al_pausar, op.id)
-        btn_cancelar = Gtk.Button(label="Cancelar", css_classes=["destructive-action"])
+        btn_cancelar = Gtk.Button(
+            label=texto("acciones.cancelar"), css_classes=["destructive-action"]
+        )
         btn_cancelar.connect("clicked", self._al_cancelar, op.id)
         controles.append(btn_pausa)
         controles.append(btn_cancelar)
@@ -180,6 +183,11 @@ class VentanaCopias(Adw.ApplicationWindow):
         etiqueta = fila["estado"]
         etiqueta.remove_css_class("error")
 
+        # Los botones solo tienen sentido mientras la copia puede seguir
+        accionable = op.estado in ("running", "paused", "error")
+        fila["pausa"].set_visible(accionable)
+        fila["cancelar"].set_visible(accionable)
+
         if op.estado == "running":
             partes = []
             if op.velocidad > 0:
@@ -189,35 +197,31 @@ class VentanaCopias(Adw.ApplicationWindow):
                 partes.append(f"quedan {fmt_restante(restante)}")
             partes.append(f"{op.archivos_ok}/{op.total_archivos} elementos")
             etiqueta.set_text("Copiando · " + " · ".join(partes))
-            fila["pausa"].set_label("Pausar")
-            fila["pausa"].set_visible(True)
-            fila["cancelar"].set_visible(True)
+            fila["pausa"].set_label(texto("acciones.pausar"))
         elif op.estado == "paused":
-            etiqueta.set_text(
-                f"En pausa · {fmt_bytes(op.copiados)} copiados "
+            # `espera` explica por qué el vigilante aún no la ha reanudado
+            detalle = op.espera or (
+                f"{fmt_bytes(op.copiados)} copiados "
                 f"({op.archivos_ok}/{op.total_archivos} elementos)"
             )
-            fila["pausa"].set_label("Reanudar")
-            fila["pausa"].set_visible(True)
-            fila["cancelar"].set_visible(True)
+            etiqueta.set_text(f"En pausa · {detalle}")
+            fila["pausa"].set_label(texto("acciones.reanudar"))
+        elif op.estado == "error":
+            detalle = op.error or "fallo desconocido"
+            if op.espera:
+                detalle += f" · {op.espera}"
+            etiqueta.set_text(f"Error: {detalle}")
+            etiqueta.add_css_class("error")
+            fila["pausa"].set_label(texto("acciones.reintentar"))
         elif op.estado == "done":
             etiqueta.set_text(
                 f"Completada · {fmt_bytes(op.total_bytes)} en "
                 f"{op.total_archivos} elementos"
             )
-            fila["pausa"].set_visible(False)
-            fila["cancelar"].set_visible(False)
-        elif op.estado == "cancelled":
+        else:  # cancelled
             etiqueta.set_text(
                 f"Cancelada · {fmt_bytes(op.copiados)} de {fmt_bytes(op.total_bytes)}"
             )
-            fila["pausa"].set_visible(False)
-            fila["cancelar"].set_visible(False)
-        else:  # error
-            etiqueta.set_text(f"Error: {op.error or 'fallo desconocido'}")
-            etiqueta.add_css_class("error")
-            fila["pausa"].set_visible(False)
-            fila["cancelar"].set_visible(False)
 
     # ------------------------------------------------------------------
     def _al_pausar(self, boton, op_id):
@@ -226,7 +230,7 @@ class VentanaCopias(Adw.ApplicationWindow):
             return
         if op.estado == "running":
             self._app.motor.pausar(op_id)
-        elif op.estado == "paused":
+        elif op.estado in ("paused", "error"):
             self._app.motor.reanudar(op_id)
         self.actualizar(op)
 

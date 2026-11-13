@@ -7,6 +7,7 @@ cada bloque leído, así que reanudar continúa exactamente donde se quedó.
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import threading
@@ -14,7 +15,9 @@ import time
 import traceback
 
 BLOQUE = 1024 * 1024  # 1 MiB
-INTERVALO_AVISO = 0.12  # mínimo entre avisos a la interfaz
+INTERVALO_AVISO = 0.12
+
+log = logging.getLogger(__name__)  # mínimo entre avisos a la interfaz
 INTERVALO_GUARDADO = 0.5  # mínimo entre escrituras en SQLite
 
 
@@ -38,6 +41,10 @@ class Operacion:
         self.estado = "running"  # running | paused | cancelled | done | error
         self.error = None
         self.creado = time.time()
+        # Pausa pedida por el usuario: el vigilante no la reanuda sola.
+        self.pausa_manual = False
+        # Motivo por el que el vigilante espera (dispositivo ausente, etc.).
+        self.espera = ""
 
         self.velocidad = 0.0  # media móvil exponencial de bytes/s
         self._bloqueando = False  # ¿está ahora mismo escrito en el destino?
@@ -58,24 +65,40 @@ class Operacion:
     # ------------------------------------------------------------------
     # control
     # ------------------------------------------------------------------
-    def pausar(self):
+    def pausar(self, manual=True):
         if self.estado != "running":
             return False
+        self.pausa_manual = manual
         self._corriendo.clear()
         self.estado = "paused"
         self._persistir_estado()
         self._aviso(force=True)
+        log.info(
+            "copia %s: en pausa (%s) en %d de %d bytes",
+            self.id,
+            "manual" if manual else "por cierre",
+            self.copiados,
+            self.total_bytes,
+        )
         return True
 
     def reanudar(self):
-        if self.estado != "paused":
+        if self.estado not in ("paused", "error"):
             return False
+        self.pausa_manual = False
+        self.espera = ""
         self.estado = "running"
         self._v_bytes = self.copiados
         self._v_tiempo = time.monotonic()
         self._corriendo.set()
         self._persistir_estado()
         self._aviso(force=True)
+        log.info(
+            "copia %s: reanudada en %d de %d bytes",
+            self.id,
+            self.copiados,
+            self.total_bytes,
+        )
         return True
 
     def cancelar(self):
@@ -86,6 +109,34 @@ class Operacion:
         self.estado = "cancelled"
         self._persistir_estado()
         self._aviso(force=True)
+        self._limpiar_parciales()
+        log.info(
+            "copia %s: cancelada; se borran los destinos incompletos", self.id
+        )
+        return True
+
+    def _limpiar_parciales(self):
+        """Borra lo que esta copia dejó a medias en el destino.
+
+        Cancelar deja el destino limpio: los ficheros incompletos desaparecen y
+        una copia posterior empieza de cero. Los que ya estaban completos no se
+        tocan.
+        """
+        for origen, destino in _pares(self.origenes, self.destino):
+            _borrar_si_incompleto(origen, destino)
+
+    def anotar_espera(self, motivo: str) -> bool:
+        """Motivo por el que el vigilante aún no puede continuar ('' = listo).
+
+        Se puede llamar desde el hilo del vigilante: los oyentes ya se encargan
+        de pasar el aviso al hilo de GTK. Devuelve True si el motivo cambió, que
+        es cuando merece la pena anotarlo también en el registro (si no, una
+        copia esperando un dispositivo escribiría una línea cada 6 segundos).
+        """
+        if self.espera == motivo:
+            return False
+        self.espera = motivo
+        self._aviso(force=True)
         return True
 
     def _persistir_estado(self):
@@ -93,7 +144,9 @@ class Operacion:
         if self._store is None:
             return
         try:
-            self._store.marcar(self.id, self.estado, self.error)
+            self._store.marcar(
+                self.id, self.estado, self.error, manual=self.pausa_manual
+            )
             self._store.actualizar(
                 self.id,
                 copiados=self.copiados,
@@ -102,7 +155,7 @@ class Operacion:
                 total_archivos=self.total_archivos,
             )
         except Exception:
-            traceback.print_exc()
+            log.exception("copia %s: no se pudo guardar el estado", self.id)
 
     def unirse(self, tiempo=None):
         hilo = self._hilo
@@ -130,7 +183,7 @@ class Operacion:
             try:
                 funcion(self)
             except Exception:
-                traceback.print_exc()
+                log.exception("copia %s: un observador falló", self.id)
 
     def _guardar(self, force: bool = False):
         if self._store is None:
@@ -148,7 +201,7 @@ class Operacion:
                 total_archivos=self.total_archivos,
             )
         except Exception:
-            traceback.print_exc()
+            log.exception("copia %s: no se pudo actualizar el progreso", self.id)
 
     # ------------------------------------------------------------------
     def _velocidad(self, ahora):
@@ -193,10 +246,16 @@ class Operacion:
         self._hilo.start()
 
     def _trabajar(self):
+        log.debug("copia %s: hilo de copia arrancado", self.id)
         try:
             self._trabajar_seguro()
+        except ErrorCopia as exc:
+            # Error esperado (ruta inexistente, permiso, E/S): va a la fila, sin traza
+            self.estado = "error"
+            self.error = str(exc)
+            log.warning("copia %s: error: %s", self.id, exc)
         except Exception as exc:  # nunca debe morir sin avisar
-            traceback.print_exc()
+            log.exception("copia %s: fallo inesperado", self.id)
             self.estado = "error"
             self.error = str(exc)
         finally:
@@ -204,7 +263,9 @@ class Operacion:
                 self.estado = "done"
             if self._store is not None:
                 try:
-                    self._store.marcar(self.id, self.estado, self.error)
+                    self._store.marcar(
+                self.id, self.estado, self.error, manual=self.pausa_manual
+            )
                     self._store.actualizar(
                         self.id,
                         copiados=self.copiados,
@@ -213,14 +274,31 @@ class Operacion:
                         total_archivos=self.total_archivos,
                     )
                 except Exception:
-                    traceback.print_exc()
+                    log.exception("copia %s: no se pudo cerrar el historial", self.id)
             self._terminado.set()
             self._aviso(force=True)
+            log.info(
+                "copia %s: %s (%d de %d bytes, %d de %d archivos)%s",
+                self.id,
+                self.estado,
+                self.copiados,
+                self.total_bytes,
+                self.archivos_ok,
+                self.total_archivos,
+                f" — {self.error}" if self.error else "",
+            )
 
     def _trabajar_seguro(self):
         if not os.path.isdir(self.destino):
             raise ErrorCopia(f"El destino no es una carpeta: {self.destino}")
         plan = self._planificar()
+        log.info(
+            "copia %s: %d archivo(s), %d bytes, %d ya presentes en destino",
+            self.id,
+            len(plan),
+            self.total_bytes,
+            self.copiados,
+        )
         self._v_bytes = self.copiados
         self._v_tiempo = time.monotonic()
 
@@ -235,6 +313,7 @@ class Operacion:
                     # Ya estaba copiado (lo contó el planificador al reanudar):
                     # se marca hecho sin volver a sumar bytes
                     self.archivos_ok += 1
+                    log.debug("copia %s: %s ya estaba completo, se salta", self.id, short(destino))
                     self._guardar()
                     self._aviso()
                     continue
@@ -268,40 +347,32 @@ class Operacion:
 
     def _planificar(self):
         """Lista de pares (origen, destino) y totales. También recalcula
-        `copiados` con lo que ya existe completo en destino (reanudación)."""
-        plan = []
-        bytes_totales = 0
+        `copiados` con lo que ya existe en destino (reanudación)."""
         for origen in self.origenes:
             origen = os.path.abspath(origen)
             if not os.path.exists(origen):
                 raise ErrorCopia(f"No existe: {origen}")
-            destino_raiz = os.path.join(self.destino, os.path.basename(origen.rstrip(os.sep)))
-            if os.path.isdir(origen) and not os.path.islink(origen):
-                for raiz, dirs, ficheros in os.walk(origen):
-                    dirs.sort()
-                    rel = os.path.relpath(raiz, origen)
-                    base = destino_raiz if rel == "." else os.path.join(destino_raiz, rel)
-                    for nombre in ficheros:
-                        src = os.path.join(raiz, nombre)
-                        dst = os.path.join(base, nombre)
-                        if os.path.isdir(src):  # enlace roto a directorio
-                            continue
-                        plan.append((src, dst))
-                        bytes_totales += _tamano(src)
-            else:
-                plan.append((origen, destino_raiz))
-                bytes_totales += _tamano(origen)
 
+        plan = _pares(self.origenes, self.destino)
         if not plan:
             raise ErrorCopia("No hay nada que copiar")
+        bytes_totales = sum(_tamano(src) for src, _dst in plan)
 
+        # Lo que ya está en destino cuenta como copiado: los ficheros completos
+        # enteros y los que quedaron a medias solo hasta donde llegaron.
         copiados_previos = 0
         for src, dst in plan:
             try:
-                if os.path.exists(dst) and os.path.getsize(dst) == os.path.getsize(src):
-                    copiados_previos += os.path.getsize(src)
+                if not os.path.exists(dst):
+                    continue
+                tam_src = os.path.getsize(src)
+                tam_dst = os.path.getsize(dst)
             except OSError:
                 continue
+            if tam_dst == tam_src:
+                copiados_previos += tam_src  # completo: se saltará
+            elif 0 < tam_dst < tam_src:
+                copiados_previos += tam_dst  # a medias: se continúa desde ahí
 
         self.total_archivos = len(plan)
         self.total_bytes = bytes_totales
@@ -312,14 +383,43 @@ class Operacion:
         return plan
 
     def _copiar_fichero(self, origen, destino):
+        """Copia un fichero reanudando por byte.
+
+        La escritura es secuencial, así que el tamaño del destino es un punto de
+        continuación válido: tras un cierre brusco se sigue desde ahí en lugar de
+        rehacer el fichero entero.
+        """
         carpeta = os.path.dirname(destino)
         if carpeta:
             os.makedirs(carpeta, exist_ok=True)
 
-        self._bloqueando = True
-        escritos = 0
+        desplazamiento = 0
+        modo = "wb"
+        tam_origen = 0
         try:
-            with open(origen, "rb") as fuente, open(destino, "wb") as salida:
+            tam_origen = os.path.getsize(origen)
+            tam_destino = os.path.getsize(destino) if os.path.exists(destino) else 0
+            if 0 < tam_destino < tam_origen:
+                desplazamiento = tam_destino
+                modo = "r+b"
+        except OSError:
+            desplazamiento, modo = 0, "wb"
+
+        log.debug(
+            "copia %s: %s -> %s desde %d de %d bytes",
+            self.id,
+            short(origen),
+            short(destino),
+            desplazamiento,
+            tam_origen,
+        )
+        self._bloqueando = True
+        escritos = desplazamiento
+        try:
+            with open(origen, "rb") as fuente, open(destino, modo) as salida:
+                if desplazamiento:
+                    fuente.seek(desplazamiento)
+                    salida.seek(desplazamiento)
                 while True:
                     if self._cancelado.is_set():
                         break
@@ -342,8 +442,12 @@ class Operacion:
             self._tramo = 0
 
         if self._cancelado.is_set():
+            # Si el cancelar llegó justo al abrir el fichero, tampoco se deja resto
+            _borrar_si_incompleto(origen, destino)
+            log.debug("copia %s: %s cancelado a %d bytes", self.id, short(destino), escritos)
             return
 
+        log.debug("copia %s: %s completo (%d bytes)", self.id, short(destino), escritos)
         try:
             shutil.copystat(origen, destino)
         except OSError:
@@ -352,6 +456,40 @@ class Operacion:
     def estado_para_pausa(self) -> tuple[bool, int]:
         """¿Se puede pausar ahora mismo? Devuelve (bloqueando, bytes del tramo)."""
         return self._bloqueando, self._tramo
+
+
+def _borrar_si_incompleto(origen: str, destino: str) -> None:
+    """Elimina el destino si quedó a medias (más pequeño que su origen)."""
+    try:
+        if os.path.exists(destino) and os.path.getsize(destino) < os.path.getsize(origen):
+            os.unlink(destino)
+    except OSError:
+        pass  # mejor esfuerzo: cancelar nunca debe fallar por esto
+
+
+def _pares(origenes, destino) -> list[tuple[str, str]]:
+    """Pares (origen, destino) que supone copiar `origenes` dentro de `destino`.
+
+    No comprueba que el origen exista: de eso se encarga quien la llama (el
+    planificador) o se salta el par (la limpieza al cancelar).
+    """
+    pares = []
+    for origen in origenes:
+        origen = os.path.abspath(origen)
+        destino_raiz = os.path.join(destino, os.path.basename(origen.rstrip(os.sep)))
+        if os.path.isdir(origen) and not os.path.islink(origen):
+            for raiz, dirs, ficheros in os.walk(origen):
+                dirs.sort()
+                rel = os.path.relpath(raiz, origen)
+                base = destino_raiz if rel == "." else os.path.join(destino_raiz, rel)
+                for nombre in ficheros:
+                    src = os.path.join(raiz, nombre)
+                    if os.path.isdir(src):  # enlace roto a directorio
+                        continue
+                    pares.append((src, os.path.join(base, nombre)))
+        else:
+            pares.append((origen, destino_raiz))
+    return pares
 
 
 def _tamano(ruta: str) -> int:
@@ -405,12 +543,10 @@ class Motor:
                 raise ErrorCopia(
                     f"El destino está dentro del origen ({short(destino)} ⊂ {short(origen)})"
                 )
-        if not os.path.isdir(destino):
-            raise ErrorCopia(f"El destino no es una carpeta: {destino}")
-        for origen in origenes:
-            if not os.path.exists(origen):
-                raise ErrorCopia(f"No existe: {origen}")
-
+        # Las comprobaciones de disco (y su coste si un dispositivo no responde)
+        # se hacen en el hilo de la copia: la tarea aparece al instante y, si la
+        # ruta falla, la fila se marca con el error.
+        log.debug("copia nueva: %d origen(es) -> %s", len(origenes), short(destino))
         op_id = self.store.crear(origenes, destino)
         op = Operacion(op_id, origenes, destino, self.store)
         self._nueva(op)
@@ -432,31 +568,49 @@ class Motor:
             for fila in self.store.pendientes():
                 if fila["id"] in self._operaciones:
                     continue
-                op = Operacion(fila["id"], fila["origenes"], fila["destino"], self.store)
+                op = Operacion(
+                    fila["id"], fila["origenes"], fila["destino"], self.store
+                )
                 op.total_bytes = fila["total_bytes"]
                 op.copiados = fila["copiados_bytes"]
                 op.total_archivos = fila["total_archivos"]
                 op.archivos_ok = fila["copiados_archivos"]
                 op.estado = "paused"
+                op.pausa_manual = bool(fila.get("pausa_manual"))
                 op.creado = fila["creado"]
+                log.debug(
+                    "copia %s: recuperada del historial en estado %s (%d de %d bytes)",
+                    op.id,
+                    fila["estado"],
+                    op.copiados,
+                    op.total_bytes,
+                )
                 self._nueva(op)
                 if fila["estado"] == "running":
                     self.store.marcar(op.id, "paused")
         return self.todas()
 
-    def pausar(self, op_id):
+    def pausar(self, op_id, manual=True):
         op = self.obtener(op_id)
-        return op.pausar() if op else False
+        return op.pausar(manual=manual) if op else False
 
     def reanudar(self, op_id):
+        """Reanuda una copia en pausa o con error.
+
+        Una copia cancelada es definitiva: ni esta llamada ni el vigilante la
+        reanudan, tampoco al reabrir la aplicación (`cargar_historial` solo
+        recupera las que estaban en marcha o en pausa).
+        """
         op = self.obtener(op_id)
         if op is None:
             return False
-        if op.estado == "paused":
-            # Si estaba pausada de una sesión anterior, su hilo ya no existe
+        if op.estado in ("paused", "error"):
+            # Si el hilo ya murió (sesión anterior o fallo), se arranca otro
             if op._terminado.is_set() or op._hilo is None:
                 op.estado = "running"
                 op.error = None
+                op.espera = ""
+                op.pausa_manual = False
                 op._terminado.clear()
                 op._cancelado.clear()
                 op._corriendo.set()
@@ -474,11 +628,14 @@ class Motor:
         return [o for o in self.todas() if o.estado in ("running", "paused")]
 
     def pausar_todo(self) -> int:
-        return sum(1 for o in self.todas() if o.pausar())
+        """Pausa por cierre de la aplicación: son reanudables automáticamente."""
+        return sum(1 for o in self.todas() if o.pausar(manual=False))
 
     def apagar(self, esperar=2.0):
         """Pausa todo y espera un poco para dejar el historial consistente."""
-        self.pausar_todo()
+        pausadas = self.pausar_todo()
+        if pausadas:
+            log.info("apagando: %d copia(s) en pausa", pausadas)
         inicio = time.monotonic()
         for op in self.todas():
             restante = max(0.1, esperar - (time.monotonic() - inicio))

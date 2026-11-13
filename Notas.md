@@ -23,14 +23,10 @@ las condiciones lo propicien. Estas condiciones son:
 - Fichero origen presente
 - Dispositivo destino listo
 - Fichero destino presente de forma incompleta, o inexistente 
-9- Debe optimizarse para la copia de ficheros grandes. La aplicación debe ser capaz de utilizar varios procesos que trabajen en conjunto para copiar hacia el destino
-un mismo fichero grande. Y así minimizar el tiempo total de cada copia. 
-10- Esos procesos que trabajan en colectivo para copiar un mismo archivo se denominarán workers
-11- El número máximo de workers que se necesiten debe ser un parámetro fijable por el usuario. Con un valor por defecto superior a uno.
-12- Cuando una copia termine debe emitir una alerta audible, y debe aparecer en lugar del botón "Cancelar", un botón nombrado "Eliminar" para quitar la operación de la pantalla.
-13- En el menú de la aplicación debe haber una opción "Acerca de" donde aparezca una ventana con la descripción reducida de lo que hace la aplicación y la versión de la misma. 
+9- Cuando una copia termine debe emitir una alerta audible, y debe aparecer en lugar del botón "Cancelar", un botón nombrado "Eliminar" para quitar la operación de la pantalla.
+10- En el menú de la aplicación debe haber una opción "Acerca de" donde aparezca una ventana con la descripción reducida de lo que hace la aplicación y la versión de la misma. 
 esa descripción debe existir en un fichero texto nombrado menu.yaml
-14- El fichero nombrado menu.yaml contendrá los nombres de las opciones de  menu. Y si una opción de menu deriva en una ventana emergente, el texto de esa ventana debe estar
+11- El fichero nombrado menu.yaml contendrá los nombres de las opciones de  menu. Y si una opción de menu deriva en una ventana emergente, el texto de esa ventana debe estar
 reflejado en ese fichero menu.yaml
 
 ### Errores detectados
