@@ -1,0 +1,229 @@
+# -*- coding: utf-8 -*-
+"""Aplicación: une motor, historial, ventana, bandeja e IPC."""
+
+from __future__ import annotations
+
+import logging
+import os
+import sys
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
+
+from .engine import ErrorCopia, Motor  # noqa: E402
+from .ipc import ServidorIpc  # noqa: E402
+from .store import Store  # noqa: E402
+from .tray import Bandeja  # noqa: E402
+from .util import APP_ID, socket_path, uri_to_path  # noqa: E402
+from .window import VentanaCopias  # noqa: E402
+
+log = logging.getLogger(__name__)
+
+
+class Aplicacion(Adw.Application):
+    def __init__(self, *, application_id=APP_ID, db_ruta=None,
+                 activar_bandeja=True, activar_ipc=True):
+        super().__init__(
+            application_id=application_id, flags=Gio.ApplicationFlags.DEFAULT_FLAGS
+        )
+        self.db_ruta = db_ruta
+        self.activar_bandeja = activar_bandeja
+        self.activar_ipc = activar_ipc
+        self.store = None
+        self.motor = None
+        self.ventana = None
+        self.ipc = None
+        self.bandeja = None
+
+    # ------------------------------------------------------------------
+    def do_startup(self):
+        Adw.Application.do_startup(self)
+        self.hold()  # la app sigue viva con la ventana oculta
+
+        self.store = Store(self.db_ruta)
+        self.motor = Motor(self.store)
+        self.motor.agregar_oyente(self._cambio_en_hilo_motor)
+        recuperadas = self.motor.cargar_historial()
+        if recuperadas:
+            log.info("%d copia(s) en pausa recuperadas del historial", len(recuperadas))
+
+        for nombre, metodo in (
+            ("nueva", self.pedir_nueva_copia),
+            ("ocultar", self.ocultar_ventana),
+            ("salir", self.salir),
+        ):
+            accion = Gio.SimpleAction.new(nombre, None)
+            accion.connect("activate", lambda _a, _p, m=metodo: m())
+            self.add_action(accion)
+
+        if self.activar_ipc:
+            self.ipc = ServidorIpc(socket_path(), self._mensaje_ipc)
+            self.ipc.start()
+
+        if self.activar_bandeja:
+            try:
+                self.bandeja = Bandeja(
+                    al_pulsar=self.alternar_ventana,
+                    al_ocultar=self.alternar_ventana,
+                    al_salir=self.salir,
+                )
+            except Exception:
+                # Sin bandeja la app sigue siendo útil (ventana + historial)
+                log.exception("No se pudo crear el icono de bandeja")
+                self.bandeja = None
+
+    def do_activate(self, *_args):
+        if self.ventana is None:
+            self.ventana = VentanaCopias(self)
+            self.ventana.connect("notify::visible", self._visibilidad_cambiada)
+            self.ventana.sincronizar(self.motor.todas())
+        self.ventana.present()
+        self._visibilidad_cambiada()
+
+    # ------------------------------------------------------------------
+    # copias
+    # ------------------------------------------------------------------
+    def crear_copia(self, origenes, destino, mostrar=True):
+        """Crea una copia. Se llama siempre desde el hilo principal."""
+        try:
+            op = self.motor.crear(origenes, destino)
+        except ErrorCopia as exc:
+            log.warning("No se pudo crear la copia: %s", exc)
+            if self.ventana is not None:
+                self.ventana.aviso(str(exc))
+            return None
+        if self.ventana is not None:
+            self.ventana.sincronizar(self.motor.todas())
+            if mostrar:
+                self.ventana.present()
+        return op
+
+    def pedir_nueva_copia(self):
+        if self.ventana is None:
+            self.do_activate()
+        dialogo = Gtk.FileDialog(title="¿Qué quieres copiar?")
+        dialogo.open_multiple(self.ventana, None, self._origenes_elegidos)
+
+    def _origenes_elegidos(self, dialogo, resultado, *_):
+        try:
+            lista = dialogo.open_multiple_finish(resultado)
+        except GLib.Error:
+            return  # cancelado por el usuario
+        origenes = []
+        for i in range(lista.get_n_items()):
+            fichero = lista.get_item(i)
+            ruta = fichero.get_path() if fichero is not None else None
+            if ruta:
+                origenes.append(ruta)
+        if not origenes:
+            return
+        dialogo2 = Gtk.FileDialog(title="¿Dónde quieres copiarlo?")
+        dialogo2.select_folder(
+            self.ventana, None, lambda d, r, o=origenes: self._destino_elegido(o, d, r)
+        )
+
+    def _destino_elegido(self, origenes, dialogo, resultado, *_):
+        try:
+            carpeta = dialogo.select_folder_finish(resultado)
+        except GLib.Error:
+            return
+        if carpeta is None or carpeta.get_path() is None:
+            return
+        self.crear_copia(origenes, carpeta.get_path())
+
+    # ------------------------------------------------------------------
+    def _cambio_en_hilo_motor(self, op):
+        """Se ejecuta en un hilo del motor: se traslada al hilo de GTK."""
+        GLib.idle_add(self._aplicar_cambio, op)
+
+    def _aplicar_cambio(self, op):
+        if self.ventana is not None:
+            self.ventana.actualizar(op)
+        return False  # no volver a invocar
+
+    # ------------------------------------------------------------------
+    # IPC con la extensión de Nautilus (se ejecuta en el hilo del socket)
+    # ------------------------------------------------------------------
+    def _mensaje_ipc(self, mensaje):
+        comando = mensaje.get("cmd")
+        if comando == "ping":
+            return {"ok": True, "pid": os.getpid()}
+        if comando == "show":
+            GLib.idle_add(self.mostrar_ventana)
+            return {"ok": True}
+        if comando == "copy":
+            try:
+                origenes = [uri_to_path(u) for u in (mensaje.get("sources") or [])]
+                destino = uri_to_path(mensaje.get("dest") or "")
+                if not origenes:
+                    raise ValueError("Nautilus no ha indicado ningún origen")
+                for origen in origenes:
+                    if not os.path.exists(origen):
+                        raise ValueError(f"No existe: {origen}")
+                if not os.path.isdir(destino):
+                    raise ValueError(f"El destino no es una carpeta: {destino}")
+            except Exception as exc:  # respuesta de error a la extensión
+                log.warning("IPC copy rechazado: %s", exc)
+                return {"ok": False, "error": str(exc)}
+            GLib.idle_add(self._crear_copia_desde_ipc, origenes, destino)
+            return {"ok": True}
+        return {"ok": False, "error": f"comando desconocido: {comando}"}
+
+    def _crear_copia_desde_ipc(self, origenes, destino):
+        """Crea la copia pedida por la extensión. Devuelve False porque
+        GLib.idle_add repetiría la llamada mientras el callback sea verdadero."""
+        self.crear_copia(origenes, destino)
+        return False
+
+    # ------------------------------------------------------------------
+    # ventana y bandeja
+    # ------------------------------------------------------------------
+    def mostrar_ventana(self):
+        self.do_activate()
+        return False
+
+    def ocultar_ventana(self, *_args):
+        if self.ventana is not None:
+            self.ventana.hide()
+        return False
+
+    def alternar_ventana(self):
+        if self.ventana is None or not self.ventana.get_visible():
+            self.mostrar_ventana()
+        else:
+            self.ocultar_ventana()
+
+    def _visibilidad_cambiada(self, *_args):
+        if self.bandeja is None or self.ventana is None:
+            return
+        visible = self.ventana.get_visible()
+        self.bandeja.cambiar_etiqueta(
+            "Ocultar ventana" if visible else "Mostrar ventana"
+        )
+
+    # ------------------------------------------------------------------
+    def salir(self, *_args):
+        log.info("Saliendo: se pausan las copias en curso")
+        try:
+            if self.motor is not None:
+                self.motor.apagar(2.0)
+            if self.ipc is not None:
+                self.ipc.cerrar()
+            if self.bandeja is not None:
+                self.bandeja.destruir()
+            if self.store is not None:
+                self.store.cerrar()
+        finally:
+            self.quit()
+        return False
+
+
+def main(argv=None):
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
+    )
+    app = Aplicacion()
+    return app.run(argv or sys.argv)

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Copiex - lanzador de la aplicación (se usa en el fichero .desktop).
+# Permite ejecutarla con doble clic sin instalar el paquete.
+set -eu
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m copiex "$@"

@@ -1,0 +1,61 @@
+#!/bin/sh
+# Instalación de Copiex en el usuario actual (sin privilegios):
+#   · fichero .desktop para lanzarlo con doble clic
+#   · extensión de Nautilus (copiar/pegar con Copiex)
+set -eu
+
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+APLICACIONES="$HOME/.local/share/applications"
+EXTENSIONES="$HOME/.local/share/nautilus-python/extensions"
+
+mkdir -p "$APLICACIONES" "$EXTENSIONES"
+chmod +x "$DIR/copiex-lanzador"
+
+# 1) entrada de escritorio con la ruta absoluta al lanzador
+sed "s|@EJECUTABLE@|$DIR/copiex-lanzador|" "$DIR/com.copiex.Manager.desktop.in" \
+    > "$APLICACIONES/com.copiex.Manager.desktop"
+chmod +x "$APLICACIONES/com.copiex.Manager.desktop"
+command -v gio >/dev/null 2>&1 \
+    && gio set "$APLICACIONES/com.copiex.Manager.desktop" metadata::trusted true \
+        >/dev/null 2>&1 || true
+command -v update-desktop-database >/dev/null 2>&1 \
+    && update-desktop-database "$APLICACIONES" >/dev/null 2>&1 || true
+
+# 2) extensión de Nautilus
+cp "$DIR/copiex/extencion_nautilus.py" "$EXTENSIONES/copiex.py"
+
+echo "Copiex instalado:"
+echo "  lanzador:   $DIR/copiex-lanzador"
+echo "  escritorio: $APLICACIONES/com.copiex.Manager.desktop"
+echo "  extensión:  $EXTENSIONES/copiex.py"
+
+# 3) comprobación de la extensión de Nautilus (única dependencia de sistema).
+#    Ubuntu 24.04 trae la API 4.0 (Nautilus 46) y Ubuntu 26.04 la 4.1
+#    (Nautilus 50); se acepta cualquiera de las dos.
+VERSION_NAUTILUS=$(
+    python3 - 2>/dev/null <<'PY' || true
+import gi
+
+for version in ("4.1", "4.0"):
+    try:
+        gi.require_version("Nautilus", version)
+        from gi.repository import Nautilus  # noqa: F401
+    except Exception:
+        continue
+    print(version)
+    break
+PY
+)
+
+if [ -z "$VERSION_NAUTILUS" ]; then
+    echo
+    echo "AVISO: falta python3-nautilus, necesario para que aparezcan"
+    echo "       «Copiar con Copiex» y «Pegar con Copiex» en Nautilus:"
+    echo "           sudo apt install python3-nautilus"
+    echo "       (en Ubuntu 24.04 y 26.04 el paquete se llama igual)"
+    echo "       Después reinicia el gestor de archivos:  nautilus -q"
+else
+    echo
+    echo "API de Nautilus disponible: $VERSION_NAUTILUS"
+    echo "Reinicia Nautilus para cargar la extensión:  nautilus -q"
+fi
