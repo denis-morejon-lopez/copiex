@@ -30,6 +30,7 @@ class VentanaCopias(Adw.ApplicationWindow):
         )
         self._app = app
         self._filas = {}  # id de copia -> widgets
+        self._eliminadas = set()  # copias quitadas de la pantalla con «Eliminar»
 
         self._overlay = Adw.ToastOverlay()
         self.set_content(self._overlay)
@@ -94,7 +95,11 @@ class VentanaCopias(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
     def sincronizar(self, operaciones):
         """Ajusta la lista al estado actual del motor."""
-        ops = sorted(operaciones, key=lambda o: o.id, reverse=True)
+        ops = sorted(
+            (o for o in operaciones if o.id not in self._eliminadas),
+            key=lambda o: o.id,
+            reverse=True,
+        )
         if {o.id for o in ops} != set(self._filas):
             self._reconstruir(ops)
         for op in ops:
@@ -153,8 +158,13 @@ class VentanaCopias(Adw.ApplicationWindow):
             label=texto("acciones.cancelar"), css_classes=["destructive-action"]
         )
         btn_cancelar.connect("clicked", self._al_cancelar, op.id)
+        # Al terminar, «Cancelar» deja paso a «Eliminar»: quita la fila de la
+        # pantalla (el historial de la base de datos se conserva).
+        btn_eliminar = Gtk.Button(label=texto("acciones.eliminar"))
+        btn_eliminar.connect("clicked", self._al_eliminar, op.id)
         controles.append(btn_pausa)
         controles.append(btn_cancelar)
+        controles.append(btn_eliminar)
 
         caja.append(datos)
         caja.append(controles)
@@ -167,6 +177,7 @@ class VentanaCopias(Adw.ApplicationWindow):
             "estado": estado,
             "pausa": btn_pausa,
             "cancelar": btn_cancelar,
+            "eliminar": btn_eliminar,
         }
         self._filas[op.id] = fila
         return fila
@@ -187,6 +198,7 @@ class VentanaCopias(Adw.ApplicationWindow):
         accionable = op.estado in ("running", "paused", "error")
         fila["pausa"].set_visible(accionable)
         fila["cancelar"].set_visible(accionable)
+        fila["eliminar"].set_visible(not accionable)
 
         if op.estado == "running":
             partes = []
@@ -239,3 +251,12 @@ class VentanaCopias(Adw.ApplicationWindow):
         op = self._app.motor.obtener(op_id)
         if op is not None:
             self.actualizar(op)
+
+    def _al_eliminar(self, boton, op_id):
+        """Quita la copia terminada de la pantalla, sin borrar el historial."""
+        self._eliminadas.add(op_id)
+        fila = self._filas.pop(op_id, None)
+        if fila is not None:
+            self._lista.remove(fila["row"])
+        self._vacio.set_visible(not self._filas)
+        self._lista.set_visible(bool(self._filas))

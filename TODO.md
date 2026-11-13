@@ -1,15 +1,15 @@
 # Copiex — punto de retorno
 
-Estado del trabajo al **13 de noviembre de 2026**. Este fichero y `Notas.md` son todo lo
+Estado del trabajo al **13 de noviembre de 2026**. Este fichero y `NOTES.md` son todo lo
 que necesita una sesión nueva: el asistente no conserva memoria entre chats, y este
 resumen evita tener que releer el historial de la conversación anterior.
 
 **Resumen en una línea:** Copiex funciona de extremo a extremo (bandeja, Nautilus,
-portapapeles, historial, pausa, cancelación, continuación por byte y reanudación
-automática). Queda un requerimiento del pliego —la alerta sonora con el botón «Eliminar»
-(nº 9)— y dos mejoras menores. Los requerimientos 10 y 11 (`menu.yaml` + «Acerca de»)
-están hechos (sección 3 decies). Los requerimientos de workers se retiraron del pliego el
-13/11 y su código se eliminó (sección 3 quinquies).
+portapapeles, historial, pausa, cancelación, continuación por byte, reanudación
+automática, alerta sonora al terminar y «Eliminar»). Los 11 requerimientos del pliego
+están hechos; solo quedan dos mejoras menores (medir muchos ficheros y tratar «cortar»
+como mover). Los requerimientos de workers se retiraron del pliego el 13/11 y su código
+se eliminó (sección 3 quinquies).
 
 ---
 
@@ -17,9 +17,9 @@ están hechos (sección 3 decies). Los requerimientos de workers se retiraron de
 
 Abre el proyecto en Freebuff y pega algo como:
 
-> Lee `PENDIENTE.md` y `Notas.md`. Sigue con el pendiente 1 (alerta sonora + «Eliminar»)
-> y no cambies nada que ya esté marcado como verificado aquí. Los workers están
-> descartados: no los reintroduzcas.
+> Lee `TODO.md` y `NOTES.md`. Los 11 requerimientos están hechos: sigue con los
+> pendientes menores de la sección 4 y no cambies nada que ya esté marcado como
+> verificado aquí. Los workers están descartados: no los reintroduzcas.
 
 La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hechas.
 
@@ -44,25 +44,27 @@ Lo único **no** comprobado visualmente es el menú desplegado: la sesión es Wa
 hay `xdotool`/`ydotool`, así que no se puede sintetizar un clic derecho. En su lugar se
 verificó el código que devuelve los ítems y su activación, que es lo que Nautilus ejecuta.
 
-## 2 bis. Mapa del código (2 883 líneas al 13/11)
+## 2 bis. Mapa del código (3 051 líneas al 13/11)
 
 | Fichero | Líneas | Responsabilidad |
 |---|---|---|
 | `copiex/util.py` | 100 | Rutas (`runtime_dir`, `socket_path`, `data_dir`), URIs ↔ rutas, formatos de tamaño y tiempo, `APP_ID`/`APP_NAME`/`EXTENSION_NAME`. |
 | `copiex/logs.py` | 203 | Registro único `copiex.log` en DEBUG con 7 días de retención: poda atómica por fecha y por tamaño (`podar`, `ManejadorSemanal`, `configurar_registro`). |
-| `copiex/engine.py` | 653 | `Operacion` (hilo de copia, pausa, aviso, velocidad, persistencia) y `Motor` (crear, pausar, reanudar, cancelar, historial). Bloques de 1 MiB; `_copiar_fichero()` reanuda por byte; `_pares()` calcula origen→destino. |
+| `copiex/engine.py` | 686 | `Operacion` (hilo de copia, pausa, aviso, velocidad, persistencia) y `Motor` (crear, pausar, reanudar, cancelar, historial). Bloques de 1 MiB con `os.copy_file_range` (reserva a lectura/escritura); un `stat` por fichero y carpetas memorizadas; `_copiar_fichero()` reanuda por byte; `_pares()` calcula origen→destino. |
 | `copiex/store.py` | 163 | SQLite en `~/.local/share/copiex/historial.db`: alta, actualización, pendientes y migración de `pausa_manual`. |
-| `copiex/vigilante.py` | 69 | Hilo cada 6 s que reanuda `paused`/`error` cuando origen y destino están disponibles; respeta `pausa_manual`. |
-| `copiex/menu.py` | 164 | Textos de la interfaz: lector YAML mínimo de `menu.yaml`, con caché y textos por defecto; `texto("menu.nueva")`. |
-| `copiex/app.py` | 300 | `Adw.Application`: une motor, ventana, bandeja e IPC; acciones `nueva`/`ocultar`/`acerca`/`salir`; argumento `--bandeja`. |
-| `copiex/window.py` | 241 | Ventana del historial: fila por copia con barra, velocidad, estado, «Reintentar»/«Cancelar»; menú (ocultar/acerca/salir) y botón «Nueva copia». |
-| `copiex/tray.py` | 319 | Icono de bandeja por StatusNotifierItem + D-Bus, sin dependencias; menú contextual. |
+| `copiex/watcher.py` | 69 | Hilo cada 6 s que reanuda `paused`/`error` cuando origen y destino están disponibles; respeta `pausa_manual`. |
+| `copiex/menu.py` | 163 | Textos de la interfaz: lector YAML mínimo de `menu.yaml`, con caché y textos por defecto; `texto("menu.nueva")`. |
+| `copiex/sound.py` | 105 | Alerta de fin de copia: reproduce el audio de `sounds/` (o el del sistema) con `canberra-gtk-play`, `paplay` o `gst-launch-1.0`, en segundo plano. |
+| `sounds/` | — | `copy-finished.wav` (alarma por defecto, sustituible) y `README.md` con las reglas de elección del fichero. |
+| `copiex/app.py` | 309 | `Adw.Application`: une motor, ventana, bandeja e IPC; acciones `nueva`/`ocultar`/`acerca`/`salir`; sonido una vez por copia terminada; argumento `--bandeja`. |
+| `copiex/window.py` | 262 | Ventana del historial: fila por copia con barra, velocidad, estado, «Reintentar»/«Cancelar»/«Eliminar»; menú (ocultar/acerca/salir) y botón «Nueva copia». |
+| `copiex/tray.py` | 320 | Icono de bandeja por StatusNotifierItem + D-Bus, sin dependencias; menú contextual. |
 | `copiex/ipc.py` | 121 | Socket Unix `$XDG_RUNTIME_DIR/copiex-<uid>/copiex.sock`; JSON por línea (`ping`, `show`, `copy`). |
-| `copiex/extencion_nautilus.py` | 540 | Extensión de Nautilus: menú contextual (etiquetas de `menu.yaml`), portapapeles, arranque en bandeja y envío por socket. |
-| `menu.yaml` | 44 | Nombres de las opciones de menú y textos de las ventanas emergentes, incluida la descripción de «Acerca de». |
-| `install.sh`, `uninstall.sh`, `copiex-lanzador`, `com.copiex.Manager.desktop.in` | — | Instalación y desinstalación completas (extensión, escritorio, datos), lanzador y entrada de escritorio. |
+| `copiex/nautilus_extension.py` | 540 | Extensión de Nautilus: menú contextual (etiquetas de `menu.yaml`), portapapeles, arranque en bandeja y envío por socket. |
+| `menu.yaml` | 43 | Nombres de las opciones de menú y textos de las ventanas emergentes, incluida la descripción de «Acerca de». |
+| `install.sh`, `uninstall.sh`, `copiex-launcher`, `com.copiex.Manager.desktop.in` | — | Instalación y desinstalación completas (extensión, escritorio, datos), lanzador y entrada de escritorio. |
 
-Puntos de entrada: `./copiex-lanzador` (ejecuta `PYTHONPATH=. python3 -m copiex`) y,
+Puntos de entrada: `./copiex-launcher` (ejecuta `PYTHONPATH=. python3 -m copiex`) y,
 desde Nautilus, la extensión instalada en
 `~/.local/share/nautilus-python/extensions/copiex.py`.
 
@@ -80,13 +82,13 @@ El pliego se renumeró el 13/11: al retirar los antiguos 9–11 (workers), «ale
 | 5 | Detener y reanudar | Hecho y probado: progreso congelado y hash correcto al reanudar. |
 | 6 | Copias visibles en la ventana principal | Hecho: historial con progreso, velocidad, estado y botones. |
 | 7 | Tomar la copia de Nautilus | Hecho: «Copiar/Pegar con Copiex» y lectura del portapapeles real de Nautilus. |
-| 8 | Estado en tiempo real y restauración automática | Hecho: SQLite + `vigilante.py` (sección 3 quater). |
-| 9 | Alerta sonora y botón «Eliminar» al terminar | **Pendiente.** |
+| 8 | Estado en tiempo real y restauración automática | Hecho: SQLite + `watcher.py` (sección 3 quater). |
+| 9 | Alerta sonora y botón «Eliminar» al terminar | Hecho: `copiex/sound.py` una vez por copia y «Eliminar» en lugar de «Cancelar» (sección 3 undecies). |
 | 10 | «Acerca de» con descripción corta y versión, en `menu.yaml` | Hecho: `app.acerca` con `Adw.AboutDialog` (versión 1.0.0 y descripción del YAML); sección 3 decies. |
 | 11 | `menu.yaml` con nombres de opciones y textos de ventanas | Hecho: menús de ventana, bandeja y Nautilus más diálogos leen `menu.yaml`; sección 3 decies. |
 | E1 | No detecta copias de Nautilus estando activo | Corregido y verificado. |
 | E2 | Error de E/S sin reanudar ni botón de cancelar | Corregido: vigilante + botones «Reintentar»/«Cancelar». |
-| E3 | Varios ficheros se copian muy lentos | **Sin medir.** El bucle copia de uno en uno con bloques de 1 MiB; falta la prueba con muchos ficheros (pendiente 3). |
+| E3 | Varios ficheros se copian muy lentos | Medido y mejorado: −20 % de tiempo y −22 % de CPU en 2 000 ficheros pequeños, −14 % en un fichero de 256 MiB (`copy_file_range`, un `stat` por fichero, carpetas memorizadas); sección 3 duodecies. |
 | E4 | «Copiar con Copiex» no arrancaba la app | Corregido: arranque en bandeja con `--bandeja` (~0,6 s). |
 
 ## 3. Fallo corregido que conviene no reintroducir
@@ -165,7 +167,7 @@ memoria: hay que reiniciarlo (`nautilus -q`). Comprobación de fechas equivalent
 
 ## 3 quater. Reanudación automática (resuelto el 12/11)
 
-`copiex/vigilante.py` (hilo propio, cada 6 s) revisa las copias en `paused` y `error` y las
+`copiex/watcher.py` (hilo propio, cada 6 s) revisa las copias en `paused` y `error` y las
 reanuda cuando el destino existe y todos los orígenes se pueden leer. Mientras no sea así,
 apunta el motivo con `Operacion.anotar_espera()` y la ventana lo muestra
 («En pausa · esperando la carpeta de destino ~/ISOs»).
@@ -200,7 +202,7 @@ Piezas clave:
 
 ## 3 quinquies. Workers: retirados del pliego y del código (13/11)
 
-Los antiguos requerimientos 9–11 ya **no están en `Notas.md`** (el pliego pasó entonces a
+Los antiguos requerimientos 9–11 ya **no están en `NOTES.md`** (el pliego pasó entonces a
 11 requerimientos). Se llegó a implementar la copia por tramos de 64 MiB con hasta 16
 hilos, fichero `.copiex-parte` + `.copiex-estado` para reanudar por tramos, ajuste
 persistente en `~/.config/copiex/config.json` y diálogo «Número de workers…». **Se retiró
@@ -247,7 +249,7 @@ otro proceso), el callback no se ejecuta y no había respaldo: `_al_pegar()` ter
 enviar nada y sin avisar. Además la respuesta de la aplicación se descartaba, así que un
 rechazo (por ejemplo «El destino no es una carpeta») tampoco se veía.
 
-Arreglos en `copiex/extencion_nautilus.py`:
+Arreglos en `copiex/nautilus_extension.py`:
 
 - `_al_pegar()` usa un testigo (`estado["hecho"]`) y dos temporizadores: a los 1,5 s, si
   el portapapeles no ha contestado y hay algo marcado con «Copiar con Copiex», se usa eso;
@@ -359,17 +361,101 @@ cuatro cadenas de `menu.yaml`; `./install.sh` copia la extensión idéntica. La 
 «Acerca de» y el menú de Nautilus no se han visto con los ojos (Wayland), pero se
 construyen sin error: falta el clic real del usuario.
 
+## 3 undecies. Alerta sonora y «Eliminar» (requerimiento 9, 13/11)
+
+**Sonido:** la alarma es un fichero de la carpeta **`sounds/`** del proyecto, para poder
+cambiarla descargando otro audio sin tocar código. `copiex/sound.py` reproduce el primer
+fichero de audio de esa carpeta, con preferencia por `copy-finished.*`; si no hay ninguno,
+usa el «Complete» del sistema. `sounds/README.md` lo explica y `sounds/copy-finished.wav`
+es un tono propio de medio segundo (dos notas ascendentes, generado para el proyecto, sin
+derechos de terceros), sustituible por otro OGG/WAV/MP3… El fichero se busca **en cada
+reproducción**, así que un cambio de sonido no exige reiniciar Copiex.
+
+Reproductores, por orden: `canberra-gtk-play -f <fichero>`, `paplay <fichero>`,
+`gst-launch-1.0 playbin` (formatos que no entienden los dos primeros), y solo después el
+sonido del sistema (`canberra-gtk-play --id=complete`, `paplay` del `.oga` de freedesktop)
+y el pitido del servidor gráfico (`Gdk.Display.beep`). Todo en segundo plano (`Popen`, sin
+esperar su salida), así que no congela la ventana. `COPIEX_SONIDOS` permite apuntar a otra
+carpeta en las pruebas.
+`Aplicacion._aplicar_cambio` lo llama cuando una copia queda en `done`, con un conjunto
+`_sonadas` para que suene **una sola vez por copia** aunque el motor siga avisando; las
+canceladas y las que fallan no suenan.
+
+**«Eliminar»:** cada fila tiene un tercer botón, oculto mientras la copia es accionable
+(`running`/`paused`/`error`). Al terminar (`done` o `cancelled`) se ocultan «Pausar» y
+«Cancelar» y aparece «Eliminar», que quita la fila de la pantalla. El id queda en
+`VentanaCopias._eliminadas` para que `sincronizar()` no la vuelva a pintar; **el historial
+de SQLite se conserva** (no se borra nada). El texto sale de `acciones.eliminar` de
+`menu.yaml`.
+
+Comprobado con una app aislada (id propio y `XDG_DATA_HOME`/`XDG_RUNTIME_DIR` temporales,
+3 MiB de origen): la copia termina, `reproducir()` se llama exactamente una vez (repetir
+`_aplicar_cambio` no vuelve a sonar), «Eliminar» está visible y «Cancelar»/«Pausar» no; al
+pulsarlo la lista queda vacía y se ve el estado vacío; `sincronizar()` no la resucita; una
+segunda copia aparece como única fila sin traer de vuelta la eliminada; una copia
+cancelada no emite sonido; `store.obtener()` confirma que la fila sigue en el historial.
+`reproducir()` real devuelve True y lanza `canberra-gtk-play` (el usuario confirmó que la
+alarma suena). Selección del fichero probada con carpetas temporales: único fichero con
+otro nombre (se usa), `copy-finished.ogg` frente a `alarm.wav` (gana el primero), solo
+texto (se usa el sonido del sistema) y carpeta inexistente (igual, sin fallos).
+
+## 3 duodecies. Error 3: copias de muchos ficheros (medido y mejorado, 13/11)
+
+**Medición**: datos sintéticos dentro del proyecto (disco NVMe real, no tmpfs), 5
+repeticiones con `os.sync()` antes de cada una y mediana; se comparó el motor de `HEAD`
+con el actual en el mismo equipo, el mismo proceso y los mismos datos.
+
+| Caso | Antes | Después | Mejora |
+|---|---|---|---|
+| 2 000 ficheros de 4 KiB | 0,257 s · 121 µs de CPU/fichero | 0,206 s · 94 µs | −20 % de tiempo, −22 % de CPU |
+| 400 ficheros de 256 KiB | 0,087 s · 83 ms de CPU | 0,076 s · 71 ms | −13 %, −14 % |
+| 1 fichero de 256 MiB | 0,111 s · 102 ms | 0,095 s · 87 ms | −14 %, −15 % |
+
+Los tiempos absolutos los domina la caché de página (la escritura va a ~1,6 GB/s en el
+caso grande); lo que vale es la comparación, tomada con el mismo origen y destino vacío.
+
+**Medidas aplicadas** (todas en `copiex/engine.py`):
+
+1. **`os.copy_file_range`** por bloques de 1 MiB en lugar de `read`/`write` de Python: el
+   núcleo copia de descriptor a descriptor sin pasar los datos por memoria de usuario. Si
+   el sistema de ficheros no lo admite (`EXDEV` al cruzar dispositivos, `EOPNOTSUPP`,
+   `ENOSYS`…), se cae en caliente a lectura/escritura desde el byte en el que iba, sin
+   duplicar ni perder nada (probado cruzando `/tmp` con `$HOME`: el registro anota
+   «copy_file_range no sirve aquí (Errno 18)» y el hash coincide).
+2. **Un solo `stat` por fichero al planificar**: antes se recorría el árbol dos veces
+   (`_pares` y `_tamano`, ya eliminada) y luego se volvía a preguntar el tamaño al copiar.
+   Ahora `_planificar()` devuelve `(plan, tamaños)` y el bucle reutiliza esos datos.
+3. **Carpetas memorizadas por copia** (`_dirs_creados`): un `makedirs` por carpeta, no por
+   fichero.
+4. Descriptores **sin búfer** para que las posiciones las lleve el núcleo, igual con
+   `copy_file_range` que con `read`/`write`.
+
+`BLOQUE` sigue en 1 MiB: con `copy_file_range` cada bloque es una sola llamada al sistema
+(y 4 MiB no mejoró la medición), así que la pausa y el progreso quedan finos.
+
+**Corrección comprobada** con el motor real (sin GTK): reanudar desde un destino a medias
+(1 MiB de 3 MiB) deja el fichero idéntico (SHA-256) y conserva la fecha; cancelar una
+operación arrancada en pausa deja el destino vacío; una carpeta con subcarpetas y un
+fichero vacío se copia entera; pausar 400 MiB recién creados y reanudar da el mismo hash.
+
+## 3 terdecies. La bandeja decía «Ocultar ventana» sin ventana (13/11)
+
+Con la app arrancada en bandeja (`--bandeja`), la ventana no existe hasta que se pide,
+pero el menú del icono ofrecía «Ocultar ventana»: `Aplicacion._visibilidad_cambiada()` se
+salía en cuanto `self.ventana` era `None`, así que se quedaba la etiqueta inicial.
+
+Corregido en dos puntos: `_visibilidad_cambiada()` ya no exige que exista la ventana (sin
+ella, o si está oculta, pone «Mostrar ventana»), y `Bandeja` nace con «Mostrar ventana»
+porque ese es su estado real al crearse; `Aplicacion.do_startup` refresca la etiqueta en
+cuanto crea el icono.
+
+Comprobado con una app aislada y contra la instancia real por D-Bus (`GetLayout` del
+`dbusmenu`): sin ventana, «Mostrar ventana»; al activar el icono, «Ocultar ventana»; al
+volver a ocultarla, «Mostrar ventana».
+
 ## 4. Pendientes, por orden sugerido
 
-1. **Alerta sonora + botón «Eliminar»** (requerimiento 9). Al pasar a `done`, emitir un
-   sonido una sola vez por copia (GSound, `canberra-gtk-play` o similar) y poner
-   «Eliminar» en lugar de «Cancelar», quitando la fila de la pantalla sin borrar el
-   historial. Ojo: `window.py` decide los botones por fila según el estado y hoy
-   «Cancelar» y «Reintentar» comparten la lógica de `accionable`.
-2. **Medir el caso de muchos ficheros** (error 3 del pliego): copiar una carpeta con
-   cientos de ficheros y anotar tiempo y tamaño de bloque. Si sale mal, subir `BLOQUE`
-   (hoy 1 MiB) o pasar a `copy_file_range`.
-3. *(menor)* Tratar el pegado de un «cortar» (`cut`) como mover, no como copiar.
+1. *(menor)* Tratar el pegado de un «cortar» (`cut`) como mover, no como copiar.
 
 ## 5. Trampas del entorno (ahorran media hora cada una)
 
@@ -379,10 +465,10 @@ construyen sin error: falta el clic real del usuario.
   extensión se pierden.
 - **Nombres:** el «centinela» de la esquina superior derecha es el icono de bandeja
   (`copiex/tray.py`, clase `Bandeja`). No confundirlo con el **vigilante**
-  (`copiex/vigilante.py`), que es el hilo que reanuda copias automáticamente.
-- **Arrancar la app:** `./copiex-lanzador` o `PYTHONPATH=. python3 -m copiex`.
+  (`copiex/watcher.py`), que es el hilo que reanuda copias automáticamente.
+- **Arrancar la app:** `./copiex-launcher` o `PYTHONPATH=. python3 -m copiex`.
   Para lanzarla desde un terminal sin que el tool espere 60 s:
-  `( setsid nohup ./copiex-lanzador >/tmp/copiex-app.log 2>&1 </dev/null & ) >/dev/null 2>&1`
+  `( setsid nohup ./copiex-launcher >/tmp/copiex-app.log 2>&1 </dev/null & ) >/dev/null 2>&1`
 - **Nunca** uses `pkill -f "python3 -m copiex"`: la propia línea de comandos del shell
   contiene ese texto y el comando se mata a sí mismo (pasó en noviembre). Localiza el PID
   con `ps -eo pid,cmd | grep "[p]ython3 -m copiex"` y mátalo por PID.
@@ -392,10 +478,10 @@ construyen sin error: falta el clic real del usuario.
 - **Desinstalar:** `./uninstall.sh` (pregunta; `--simular` para ver antes lo que
   borraría, `--conservar-datos` para quedarse con historial y registros).
 - **Instalar cambios de la extensión:** `./install.sh` copia
-  `copiex/extencion_nautilus.py` a `~/.local/share/nautilus-python/extensions/copiex.py`.
+  `copiex/nautilus_extension.py` a `~/.local/share/nautilus-python/extensions/copiex.py`.
   Después hay que reiniciar Nautilus (`nautilus -q`) o no se recarga.
 - **Protocolo IPC:** `{"cmd":"copy","sources":[uri,...],"dest":uri}`, además de `ping` y `show`.
-- **Probar sin clic derecho:** importar `copiex.extencion_nautilus`, instanciar
+- **Probar sin clic derecho:** importar `copiex.nautilus_extension`, instanciar
   `ExtencionCopiex()` y emitir `activate` sobre los ítems de `get_file_items()` /
   `get_background_items()`. Es exactamente lo que hace Nautilus.
 - **Sesión Wayland** con GNOME 50: no hay `xdotool`, `wmctrl` ni `ydotool`; solo `grim`

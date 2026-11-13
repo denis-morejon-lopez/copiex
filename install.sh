@@ -9,7 +9,7 @@ APLICACIONES="$HOME/.local/share/applications"
 EXTENSIONES="$HOME/.local/share/nautilus-python/extensions"
 
 # 0) el script tiene que seguir viviendo junto al proyecto
-if [ ! -f "$DIR/copiex/extencion_nautilus.py" ] || [ ! -f "$DIR/copiex-lanzador" ]; then
+if [ ! -f "$DIR/copiex/nautilus_extension.py" ] || [ ! -f "$DIR/copiex-launcher" ]; then
     echo "ERROR: no encuentro el proyecto Copiex junto a este script." >&2
     echo "       Ejecútalo desde la carpeta del proyecto: ./install.sh" >&2
     exit 1
@@ -46,10 +46,10 @@ if [ -n "$FALTAN" ]; then
 fi
 
 mkdir -p "$APLICACIONES" "$EXTENSIONES"
-chmod +x "$DIR/copiex-lanzador"
+chmod +x "$DIR/copiex-launcher"
 
 # 1) entrada de escritorio con la ruta absoluta al lanzador
-sed "s|@EJECUTABLE@|$DIR/copiex-lanzador|" "$DIR/com.copiex.Manager.desktop.in" \
+sed "s|@EJECUTABLE@|$DIR/copiex-launcher|" "$DIR/com.copiex.Manager.desktop.in" \
     > "$APLICACIONES/com.copiex.Manager.desktop"
 chmod +x "$APLICACIONES/com.copiex.Manager.desktop"
 command -v gio >/dev/null 2>&1 \
@@ -59,15 +59,15 @@ command -v update-desktop-database >/dev/null 2>&1 \
     && update-desktop-database "$APLICACIONES" >/dev/null 2>&1 || true
 
 # 2) extensión de Nautilus
-cp "$DIR/copiex/extencion_nautilus.py" "$EXTENSIONES/copiex.py"
+cp "$DIR/copiex/nautilus_extension.py" "$EXTENSIONES/copiex.py"
 
-if ! cmp -s "$DIR/copiex/extencion_nautilus.py" "$EXTENSIONES/copiex.py"; then
+if ! cmp -s "$DIR/copiex/nautilus_extension.py" "$EXTENSIONES/copiex.py"; then
     echo "ERROR: la extensión copiada no coincide con la del proyecto." >&2
     exit 1
 fi
 
 echo "Copiex instalado:"
-echo "  lanzador:   $DIR/copiex-lanzador"
+echo "  lanzador:   $DIR/copiex-launcher"
 echo "  escritorio: $APLICACIONES/com.copiex.Manager.desktop"
 echo "  extensión:  $EXTENSIONES/copiex.py"
 

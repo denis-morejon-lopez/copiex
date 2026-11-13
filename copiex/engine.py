@@ -56,6 +56,9 @@ class Operacion:
         self._terminado = threading.Event()
         self._hilo = None
 
+        # Carpetas ya creadas por esta copia: evita un makedirs por fichero
+        self._dirs_creados = set()
+
         self._oyentes = []
         self._ultimo_aviso = 0.0
         self._ultimo_guardado = 0.0
@@ -291,7 +294,7 @@ class Operacion:
     def _trabajar_seguro(self):
         if not os.path.isdir(self.destino):
             raise ErrorCopia(f"El destino no es una carpeta: {self.destino}")
-        plan = self._planificar()
+        plan, tamanos = self._planificar()
         log.info(
             "copia %s: %d archivo(s), %d bytes, %d ya presentes en destino",
             self.id,
@@ -309,7 +312,7 @@ class Operacion:
                 break  # cancelado mientras estaba en pausa
 
             try:
-                if os.path.exists(destino) and os.path.getsize(destino) == os.path.getsize(origen):
+                if os.path.exists(destino) and os.path.getsize(destino) == tamanos[origen]:
                     # Ya estaba copiado (lo contó el planificador al reanudar):
                     # se marca hecho sin volver a sumar bytes
                     self.archivos_ok += 1
@@ -317,7 +320,7 @@ class Operacion:
                     self._guardar()
                     self._aviso()
                     continue
-                self._copiar_fichero(origen, destino)
+                self._copiar_fichero(origen, destino, tamanos[origen])
             except ErrorCopia:
                 raise
             except OSError as exc:
@@ -356,7 +359,17 @@ class Operacion:
         plan = _pares(self.origenes, self.destino)
         if not plan:
             raise ErrorCopia("No hay nada que copiar")
-        bytes_totales = sum(_tamano(src) for src, _dst in plan)
+        # Un solo stat por fichero: el tamaño se guarda para la suma y para no
+        # volver a preguntarlo al copiar (con miles de ficheros se nota).
+        tamanos = {}
+        bytes_totales = 0
+        for src, _dst in plan:
+            try:
+                tam = os.stat(src).st_size
+            except OSError:
+                tam = 0
+            tamanos[src] = tam
+            bytes_totales += tam
 
         # Lo que ya está en destino cuenta como copiado: los ficheros completos
         # enteros y los que quedaron a medias solo hasta donde llegaron.
@@ -380,25 +393,35 @@ class Operacion:
         self.archivos_ok = 0
         self._guardar(force=True)
         self._aviso(force=True)
-        return plan
+        return plan, tamanos
 
-    def _copiar_fichero(self, origen, destino):
+    def _asegurar_carpeta(self, destino):
+        """Crea la carpeta del destino una sola vez por copia."""
+        carpeta = os.path.dirname(destino)
+        if not carpeta or carpeta in self._dirs_creados:
+            return
+        os.makedirs(carpeta, exist_ok=True)
+        self._dirs_creados.add(carpeta)
+
+    def _copiar_fichero(self, origen, destino, tam_origen=None):
         """Copia un fichero reanudando por byte.
 
         La escritura es secuencial, así que el tamaño del destino es un punto de
         continuación válido: tras un cierre brusco se sigue desde ahí en lugar de
         rehacer el fichero entero.
+
+        Los datos se mueven con `os.copy_file_range` (copia dentro del núcleo,
+        sin pasar por Python) cuando el sistema de ficheros lo admite; si no, se
+        cae a lectura/escritura por bloques, con el mismo resultado.
         """
-        carpeta = os.path.dirname(destino)
-        if carpeta:
-            os.makedirs(carpeta, exist_ok=True)
+        self._asegurar_carpeta(destino)
 
         desplazamiento = 0
         modo = "wb"
-        tam_origen = 0
         try:
-            tam_origen = os.path.getsize(origen)
-            tam_destino = os.path.getsize(destino) if os.path.exists(destino) else 0
+            if tam_origen is None:
+                tam_origen = os.stat(origen).st_size
+            tam_destino = os.stat(destino).st_size
             if 0 < tam_destino < tam_origen:
                 desplazamiento = tam_destino
                 modo = "r+b"
@@ -416,22 +439,48 @@ class Operacion:
         self._bloqueando = True
         escritos = desplazamiento
         try:
-            with open(origen, "rb") as fuente, open(destino, modo) as salida:
+            # Sin búfer de Python: los descriptores se usan tal cual y las
+            # posiciones las lleva el núcleo, igual con copy_file_range que
+            # con read/write.
+            with open(origen, "rb", buffering=0) as fuente, open(
+                destino, modo, buffering=0
+            ) as salida:
                 if desplazamiento:
                     fuente.seek(desplazamiento)
                     salida.seek(desplazamiento)
+                usar_rango = hasattr(os, "copy_file_range")
                 while True:
                     if self._cancelado.is_set():
                         break
                     if not self._corriendo.is_set():
                         if not self._esperar_permiso():
                             break
-                    bloque = fuente.read(BLOQUE)
-                    if not bloque:
-                        break
-                    salida.write(bloque)
-                    escritos += len(bloque)
-                    self.copiados += len(bloque)
+                    if usar_rango:
+                        try:
+                            leidos = os.copy_file_range(
+                                fuente.fileno(), salida.fileno(), BLOQUE
+                            )
+                        except OSError as exc:
+                            # EXDEV (otro sistema de ficheros), EOPNOTSUPP…:
+                            # el resto del fichero se copia a mano.
+                            log.debug(
+                                "copia %s: copy_file_range no sirve aquí (%s); "
+                                "se sigue con lectura/escritura",
+                                self.id,
+                                exc,
+                            )
+                            usar_rango = False
+                            continue
+                        if leidos == 0:
+                            break
+                    else:
+                        bloque = fuente.read(BLOQUE)
+                        if not bloque:
+                            break
+                        salida.write(bloque)
+                        leidos = len(bloque)
+                    escritos += leidos
+                    self.copiados += leidos
                     self._tramo = escritos
                     ahora = time.monotonic()
                     self._velocidad(ahora)
@@ -490,22 +539,6 @@ def _pares(origenes, destino) -> list[tuple[str, str]]:
         else:
             pares.append((origen, destino_raiz))
     return pares
-
-
-def _tamano(ruta: str) -> int:
-    try:
-        if os.path.isdir(ruta) and not os.path.islink(ruta):
-            total = 0
-            for raiz, dirs, ficheros in os.walk(ruta):
-                for nombre in ficheros:
-                    try:
-                        total += os.path.getsize(os.path.join(raiz, nombre))
-                    except OSError:
-                        pass
-            return total
-        return os.path.getsize(ruta)
-    except OSError:
-        return 0
 
 
 class Motor:

@@ -48,6 +48,7 @@ _POR_DEFECTO = {
         "reanudar": "Reanudar",
         "reintentar": "Reintentar",
         "cancelar": "Cancelar",
+        "eliminar": "Eliminar",
     },
     "dialogos": {
         "origen_titulo": "¿Qué quieres copiar?",

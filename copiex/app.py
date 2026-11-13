@@ -17,11 +17,12 @@ from .engine import ErrorCopia, Motor  # noqa: E402
 from . import __version__  # noqa: E402
 from .ipc import ServidorIpc  # noqa: E402
 from .menu import texto  # noqa: E402
+from .sound import reproducir  # noqa: E402
 from .logs import configurar_registro  # noqa: E402
 from .store import Store  # noqa: E402
 from .tray import Bandeja  # noqa: E402
 from .util import APP_ID, APP_NAME, socket_path, uri_to_path  # noqa: E402
-from .vigilante import Vigilante  # noqa: E402
+from .watcher import Vigilante  # noqa: E402
 from .window import VentanaCopias  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class Aplicacion(Adw.Application):
         self.ipc = None
         self.bandeja = None
         self.vigilante = None
+        self._sonadas = set()  # copias cuyo final ya se ha avisado con sonido
 
     # ------------------------------------------------------------------
     def do_startup(self):
@@ -86,6 +88,7 @@ class Aplicacion(Adw.Application):
                     al_ocultar=self.alternar_ventana,
                     al_salir=self.salir,
                 )
+                self._visibilidad_cambiada()  # aún sin ventana: «Mostrar ventana»
             except Exception:
                 # Sin bandeja la app sigue siendo útil (ventana + historial)
                 log.exception("No se pudo crear el icono de bandeja")
@@ -164,6 +167,10 @@ class Aplicacion(Adw.Application):
         GLib.idle_add(self._aplicar_cambio, op)
 
     def _aplicar_cambio(self, op):
+        # Una sola alerta por copia, y solo al completarse (requerimiento 9)
+        if op.estado == "done" and op.id not in self._sonadas:
+            self._sonadas.add(op.id)
+            reproducir()
         if self.ventana is not None:
             self.ventana.actualizar(op)
         return False  # no volver a invocar
@@ -252,9 +259,11 @@ class Aplicacion(Adw.Application):
             self.ocultar_ventana()
 
     def _visibilidad_cambiada(self, *_args):
-        if self.bandeja is None or self.ventana is None:
+        # Sin ventana creada (arranque en bandeja) la opción correcta es
+        # «Mostrar ventana»: la ventana no existe, así que no hay nada que ocultar.
+        if self.bandeja is None:
             return
-        visible = self.ventana.get_visible()
+        visible = self.ventana is not None and self.ventana.get_visible()
         self.bandeja.cambiar_etiqueta(
             texto("menu.ocultar") if visible else texto("menu.mostrar")
         )

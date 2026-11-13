@@ -120,7 +120,8 @@ class Bandeja:
         self._al_ocultar = al_ocultar
         self._al_salir = al_salir
         self._titulo = titulo
-        self._etiqueta = texto("menu.ocultar")
+        # Al crearse la bandeja todavía no hay ventana: la opción es «Mostrar».
+        self._etiqueta = texto("menu.mostrar")
         self._revision = 1
 
         self.conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
