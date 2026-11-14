@@ -58,9 +58,15 @@ class Vigilante(threading.Thread):
 
     @staticmethod
     def _motivo_espera(op) -> str:
-        """Cadena vacía si la copia puede continuar; si no, el motivo."""
-        if not os.path.isdir(op.destino):
-            return f"esperando la carpeta de destino {short_path(op.destino)}"
+        """Cadena vacía si la copia puede continuar; si no, el motivo.
+
+        Basta con que falte una de las carpetas de destino para esperar: así
+        una copia a varios USB se reanuda entera cuando vuelven todos, igual
+        que cuando solo había un destino.
+        """
+        for destino in getattr(op, "destinos", []):
+            if destino.estado != "done" and not os.path.isdir(destino.ruta):
+                return f"esperando la carpeta de destino {short_path(destino.ruta)}"
         for origen in op.origenes:
             try:
                 os.stat(origen)

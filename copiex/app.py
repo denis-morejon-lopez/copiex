@@ -117,22 +117,33 @@ class Aplicacion(Adw.Application):
     # ------------------------------------------------------------------
     # copias
     # ------------------------------------------------------------------
-    def crear_copia(self, origenes, destino, mostrar=True):
-        """Crea una copia. Se llama siempre desde el hilo principal."""
+    def crear_copia(self, origenes, destinos, mostrar=True):
+        """Crea una copia a una o varias carpetas de destino.
+
+        Con varios destinos se lee el origen una sola vez y se escribe en todos
+        a la vez. Se llama siempre desde el hilo principal.
+        """
+        if isinstance(destinos, str):
+            destinos = [destinos]
         try:
-            op = self.motor.crear(origenes, destino)
+            op = self.motor.crear(origenes, destinos)
         except ErrorCopia as exc:
             log.warning("No se pudo crear la copia: %s", exc)
             if self.ventana is not None:
                 self.ventana.aviso(str(exc))
             return None
-        log.info("Copia id=%s creada en la cola: %s -> %s", op.id, origenes, destino)
+        log.info("Copia id=%s creada en la cola: %s -> %s", op.id, origenes, destinos)
         if mostrar and self.ventana is None:
             self.do_activate()  # la tarea tiene que verse: se abre la ventana
         if self.ventana is not None:
             self.ventana.sincronizar(self.motor.todas())
             if mostrar:
+                # Si estaba oculta se vuelve a mostrar; en Wayland el foco lo
+                # decide el compositor, pero la ventana queda delante y visible.
+                if not self.ventana.get_visible():
+                    self.ventana.show()
                 self.ventana.present()
+                log.debug("ventana al frente para la copia %s", op.id)
         return op
 
     def pedir_nueva_copia(self):
@@ -166,7 +177,7 @@ class Aplicacion(Adw.Application):
             return
         if carpeta is None or carpeta.get_path() is None:
             return
-        self.crear_copia(origenes, carpeta.get_path())
+        self.crear_copia(origenes, [carpeta.get_path()])
 
     # ------------------------------------------------------------------
     def _cambio_en_hilo_motor(self, op):
@@ -204,25 +215,29 @@ class Aplicacion(Adw.Application):
             log.info("Petición de copia desde Nautilus: %s", mensaje.get("sources"))
             try:
                 origenes = [uri_to_path(u) for u in (mensaje.get("sources") or [])]
-                destino = uri_to_path(mensaje.get("dest") or "")
+                uris_destino = mensaje.get("dests") or [mensaje.get("dest") or ""]
+                destinos = [uri_to_path(u) for u in uris_destino if u]
                 if not origenes:
                     raise ValueError("Nautilus no ha indicado ningún origen")
+                if not destinos:
+                    raise ValueError("Nautilus no ha indicado ningún destino")
                 for origen in origenes:
                     if not os.path.exists(origen):
                         raise ValueError(f"No existe: {origen}")
-                if not os.path.isdir(destino):
-                    raise ValueError(f"El destino no es una carpeta: {destino}")
+                for destino in destinos:
+                    if not os.path.isdir(destino):
+                        raise ValueError(f"El destino no es una carpeta: {destino}")
             except Exception as exc:  # respuesta de error a la extensión
                 log.warning("IPC copy rechazado: %s", exc)
                 return {"ok": False, "error": str(exc)}
-            GLib.idle_add(self._crear_copia_desde_ipc, origenes, destino)
+            GLib.idle_add(self._crear_copia_desde_ipc, origenes, destinos)
             return {"ok": True}
         return {"ok": False, "error": f"comando desconocido: {comando}"}
 
-    def _crear_copia_desde_ipc(self, origenes, destino):
+    def _crear_copia_desde_ipc(self, origenes, destinos):
         """Crea la copia pedida por la extensión. Devuelve False porque
         GLib.idle_add repetiría la llamada mientras el callback sea verdadero."""
-        self.crear_copia(origenes, destino)
+        self.crear_copia(origenes, destinos)
         return False
 
     # ------------------------------------------------------------------

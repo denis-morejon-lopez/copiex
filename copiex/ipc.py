@@ -41,7 +41,7 @@ class ServidorIpc(threading.Thread):
             self._servidor = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self._servidor.bind(self.ruta)
             os.chmod(self.ruta, 0o600)  # solo el usuario
-            self._servidor.listen(8)
+            self._servidor.listen(32)
             self._servidor.settimeout(0.5)
             while not self._stop.is_set():
                 try:
@@ -50,7 +50,12 @@ class ServidorIpc(threading.Thread):
                     continue
                 except OSError:
                     break
-                self._atender(conexion)
+                # Cada conexión se atiende aparte: un cliente lento o colgado
+                # (por ejemplo, una traza de Nautilus) no puede retrasar la
+                # siguiente petición, que es la que lanza la copia.
+                threading.Thread(
+                    target=self._atender, args=(conexion,), daemon=True
+                ).start()
         except Exception:
             log.exception("IPC: el servidor se detuvo")
         finally:

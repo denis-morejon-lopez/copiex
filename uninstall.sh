@@ -37,6 +37,7 @@ done
 EXTENSIONES="$HOME/.local/share/nautilus-python/extensions"
 APLICACIONES="$HOME/.local/share/applications"
 ICONOS="$HOME/.local/share/icons/hicolor/scalable/apps"
+SERVICIOS="$HOME/.local/share/dbus-1/services"
 DATOS="$HOME/.local/share/copiex"
 CONFIG="$HOME/.config/copiex"
 AUTOSTART="$HOME/.config/autostart/com.copiex.Manager.desktop"
@@ -84,6 +85,7 @@ parar_aplicacion() {
 echo "Se va a desinstalar Copiex:"
 echo "  extensión:  $EXTENSIONES/copiex.py"
 echo "  escritorio: $APLICACIONES/com.copiex.Manager.desktop"
+echo "  servicio:   $SERVICIOS/com.copiex.Manager.service"
 echo "  iconos:     $ICONOS/com.copiex.Manager.svg"
 echo "  socket:     $RUNTIME"
 if [ "$CONSERVAR" -eq 1 ]; then
@@ -116,6 +118,7 @@ if [ "$SIMULAR" -eq 0 ]; then
     rmdir "$EXTENSIONES/__pycache__" 2>/dev/null || true
 fi
 borrar "$APLICACIONES/com.copiex.Manager.desktop"
+borrar "$SERVICIOS/com.copiex.Manager.service"
 borrar "$ICONOS/com.copiex.Manager.svg"
 borrar "$ICONOS/com.copiex.Manager-symbolic.svg"
 borrar "$AUTOSTART"

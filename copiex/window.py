@@ -141,8 +141,12 @@ class VentanaCopias(Adw.ApplicationWindow):
         caja.set_margin_end(16)
 
         datos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5, hexpand=True)
+        varios = len(op.destinos) > 1
         titulo = Gtk.Label(
-            label=short_path(op.destino), xalign=0, css_classes=["heading"]
+            label=(f"Copia a {len(op.destinos)} destinos" if varios
+                   else short_path(op.destino)),
+            xalign=0,
+            css_classes=["heading"],
         )
         titulo.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         subtitulo = Gtk.Label(
@@ -151,10 +155,23 @@ class VentanaCopias(Adw.ApplicationWindow):
             css_classes=["caption", "dim-label"],
         )
         subtitulo.set_ellipsize(Pango.EllipsizeMode.END)
+
+        # Con varios destinos, una línea por destino: cada cola se ve aparte.
+        etiquetas_destino = []
+        caja_destinos = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=1
+        )
+        if varios:
+            for destino in op.destinos:
+                linea = Gtk.Label(xalign=0, css_classes=["caption", "dim-label"])
+                linea.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+                caja_destinos.append(linea)
+                etiquetas_destino.append(linea)
+
         barra = Gtk.ProgressBar(show_text=True)
         estado = Gtk.Label(xalign=0, css_classes=["caption", "dim-label"])
         estado.set_wrap(True)
-        for widget in (titulo, subtitulo, barra, estado):
+        for widget in (titulo, subtitulo, caja_destinos, barra, estado):
             datos.append(widget)
 
         controles = Gtk.Box(
@@ -185,6 +202,7 @@ class VentanaCopias(Adw.ApplicationWindow):
             "row": row,
             "barra": barra,
             "estado": estado,
+            "destinos": etiquetas_destino,
             "pausa": btn_pausa,
             "cancelar": btn_cancelar,
             "eliminar": btn_eliminar,
@@ -200,6 +218,24 @@ class VentanaCopias(Adw.ApplicationWindow):
             )
         else:
             fila["barra"].set_text("")
+
+        for linea, destino in zip(fila.get("destinos") or [], op.destinos):
+            linea.remove_css_class("error")
+            if destino.estado == "done":
+                detalle = f"Completado · {fmt_bytes(destino.total_bytes)}"
+            elif destino.estado == "paused":
+                detalle = "En pausa"
+                if destino.espera:
+                    detalle += f" · {destino.espera}"
+            elif destino.estado == "error":
+                detalle = f"Error: {destino.error or 'fallo desconocido'}"
+                linea.add_css_class("error")
+            else:
+                detalle = (
+                    f"{int(destino.fraccion * 100)} % · "
+                    f"{fmt_bytes(destino.copiados)} de {fmt_bytes(destino.total_bytes)}"
+                )
+            linea.set_text(f"• {short_path(destino.ruta)} · {detalle}")
 
         etiqueta = fila["estado"]
         etiqueta.remove_css_class("error")
@@ -226,6 +262,12 @@ class VentanaCopias(Adw.ApplicationWindow):
                 f"{fmt_bytes(op.copiados)} copiados "
                 f"({op.archivos_ok}/{op.total_archivos} elementos)"
             )
+            hechos = sum(1 for d in op.destinos if d.estado == "done")
+            if len(op.destinos) > 1 and hechos:
+                detalle = (
+                    f"{hechos} de {len(op.destinos)} destinos completados · "
+                    + detalle
+                )
             etiqueta.set_text(f"En pausa · {detalle}")
             fila["pausa"].set_label(texto("acciones.reanudar"))
         elif op.estado == "error":

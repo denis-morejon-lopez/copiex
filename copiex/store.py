@@ -35,6 +35,19 @@ CREATE TABLE IF NOT EXISTS copias (
     actualizado     REAL    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_copias_estado ON copias(estado);
+CREATE TABLE IF NOT EXISTS destinos (
+    copia_id          INTEGER NOT NULL,
+    ruta              TEXT    NOT NULL,
+    orden             INTEGER NOT NULL DEFAULT 0,
+    total_bytes       INTEGER NOT NULL DEFAULT 0,
+    copiados_bytes    INTEGER NOT NULL DEFAULT 0,
+    total_archivos    INTEGER NOT NULL DEFAULT 0,
+    copiados_archivos INTEGER NOT NULL DEFAULT 0,
+    estado            TEXT    NOT NULL DEFAULT 'running',
+    error             TEXT,
+    actualizado       REAL    NOT NULL,
+    PRIMARY KEY (copia_id, ruta)
+);
 """
 
 
@@ -67,16 +80,28 @@ class Store:
             )
 
     # ------------------------------------------------------------------
-    def crear(self, origenes, destino) -> int:
+    def crear(self, origenes, destinos) -> int:
+        """Crea la copia y sus destinos (una fila por carpeta de destino)."""
+        if isinstance(destinos, str):
+            destinos = [destinos]
+        destinos = list(destinos)
+        if not destinos:
+            raise ValueError("La copia necesita al menos un destino")
         ahora = time.time()
         with self._lock:
             cur = self._conn.execute(
                 "INSERT INTO copias (origenes, destino, estado, creado, actualizado)"
                 " VALUES (?, ?, 'running', ?, ?)",
-                (json.dumps(list(origenes)), destino, ahora, ahora),
+                (json.dumps(list(origenes)), destinos[0], ahora, ahora),
+            )
+            op_id = int(cur.lastrowid)
+            self._conn.executemany(
+                "INSERT INTO destinos (copia_id, ruta, orden, estado, actualizado)"
+                " VALUES (?, ?, ?, 'running', ?)",
+                [(op_id, ruta, orden, ahora) for orden, ruta in enumerate(destinos)],
             )
             self._conn.commit()
-            return int(cur.lastrowid)
+            return op_id
 
     def actualizar(self, op_id, *, copiados=None, archivos=None,
                    total_bytes=None, total_archivos=None):
@@ -103,6 +128,50 @@ class Store:
                 f"UPDATE copias SET {', '.join(campos)} WHERE id = ?", valores
             )
             self._conn.commit()
+
+    def actualizar_destino(self, op_id, ruta, *, copiados=None, archivos=None,
+                          total_bytes=None, total_archivos=None, estado=None,
+                          error=None):
+        campos, valores = [], []
+        if copiados is not None:
+            campos.append("copiados_bytes = ?")
+            valores.append(int(copiados))
+        if archivos is not None:
+            campos.append("copiados_archivos = ?")
+            valores.append(int(archivos))
+        if total_bytes is not None:
+            campos.append("total_bytes = ?")
+            valores.append(int(total_bytes))
+        if total_archivos is not None:
+            campos.append("total_archivos = ?")
+            valores.append(int(total_archivos))
+        if estado is not None:
+            campos.append("estado = ?")
+            valores.append(estado)
+        if error is not None:
+            campos.append("error = ?")
+            valores.append(error)
+        if not campos:
+            return
+        campos.append("actualizado = ?")
+        valores.append(time.time())
+        valores.extend((op_id, ruta))
+        with self._lock:
+            self._conn.execute(
+                f"UPDATE destinos SET {', '.join(campos)}"
+                " WHERE copia_id = ? AND ruta = ?",
+                valores,
+            )
+            self._conn.commit()
+
+    def destinos_de(self, op_id):
+        """Destinos de una copia, en el orden en que se eligieron."""
+        with self._lock:
+            filas = self._conn.execute(
+                "SELECT * FROM destinos WHERE copia_id = ? ORDER BY orden, ruta",
+                (op_id,),
+            ).fetchall()
+        return [dict(f) for f in filas]
 
     def marcar(self, op_id, estado, error=None, manual=None):
         """Actualiza el estado. Con `manual` se guarda si la pausa la pidió el

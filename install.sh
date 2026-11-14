@@ -8,6 +8,7 @@ DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APLICACIONES="$HOME/.local/share/applications"
 EXTENSIONES="$HOME/.local/share/nautilus-python/extensions"
 ICONOS="$HOME/.local/share/icons/hicolor/scalable/apps"
+SERVICIOS="$HOME/.local/share/dbus-1/services"
 
 # 0) el script tiene que seguir viviendo junto al proyecto
 if [ ! -f "$DIR/copiex/nautilus_extension.py" ] || [ ! -f "$DIR/copiex-launcher" ]; then
@@ -46,7 +47,7 @@ if [ -n "$FALTAN" ]; then
     echo "       Instálalas con:  sudo apt install $FALTAN" >&2
 fi
 
-mkdir -p "$APLICACIONES" "$EXTENSIONES" "$ICONOS"
+mkdir -p "$APLICACIONES" "$EXTENSIONES" "$ICONOS" "$SERVICIOS"
 chmod +x "$DIR/copiex-launcher"
 
 # 1) entrada de escritorio con la ruta absoluta al lanzador
@@ -59,7 +60,13 @@ command -v gio >/dev/null 2>&1 \
 command -v update-desktop-database >/dev/null 2>&1 \
     && update-desktop-database "$APLICACIONES" >/dev/null 2>&1 || true
 
-# 1 bis) iconos: el de la aplicación (escritorio, ventana, «Acerca de») y el
+# 1 bis) servicio D-Bus: la extensión de Nautilus le pide al bus que arranque
+# Copiex, así no hace un fork desde el gestor de archivos (que podía tardar
+# minutos y retrasaba el comienzo de la copia).
+sed "s|@EJECUTABLE@|$DIR/copiex-launcher|" "$DIR/com.copiex.Manager.service.in" \
+    > "$SERVICIOS/com.copiex.Manager.service"
+
+# 1 ter) iconos: el de la aplicación (escritorio, ventana, «Acerca de») y el
 # simbólico de una tinta que usa la bandeja.
 cp "$DIR/icons/com.copiex.Manager.svg" \
    "$DIR/icons/com.copiex.Manager-symbolic.svg" "$ICONOS/"
@@ -78,6 +85,7 @@ fi
 echo "Copiex instalado:"
 echo "  lanzador:   $DIR/copiex-launcher"
 echo "  escritorio: $APLICACIONES/com.copiex.Manager.desktop"
+echo "  servicio:   $SERVICIOS/com.copiex.Manager.service"
 echo "  extensión:  $EXTENSIONES/copiex.py"
 echo "  iconos:     $ICONOS/com.copiex.Manager.svg"
 

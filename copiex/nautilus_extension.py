@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """Extensión de Nautilus para Copiex.
 
-Añade dos entradas al menú contextual de Nautilus:
+Añade tres entradas al menú contextual de Nautilus:
 
-  * «Copiar con Copiex»      → sobre la selección (marca los orígenes)
-  * «Pegar con Copiex»       → sobre la carpeta de destino (lanza la copia)
+  * «Copiar con Copiex»           → sobre la selección (marca los orígenes)
+  * «Pegar con Copiex»            → sobre la carpeta de destino (lanza la copia)
+  * «Pegar con Copiex N destinos» → copia a esa carpeta y a otras elegidas
 
 La extensión es solo un puente: envía {origen…, destino} por el socket UNIX
 de Copiex y la copia (progreso, pausa, reanudación) la hace la aplicación.
@@ -20,12 +21,12 @@ Compatible con la API de Nautilus que traiga el sistema:
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import socket
 import subprocess
 import sys
-import threading
 import time
 
 import gi
@@ -77,6 +78,7 @@ except Exception:  # pragma: no cover
     Gtk = None
 
 DESKTOP_ID = "com.copiex.Manager.desktop"
+APP_ID = "com.copiex.Manager"  # nombre que Copiex registra en el bus de sesión
 
 # Formato real del portapapeles de Nautilus (GNOME Files): la primera línea
 # lleva la acción y después una URI por línea.
@@ -108,11 +110,22 @@ _seleccion: list = []
 _TEXTO_DEFECTO = {
     "copiar": "Copiar con Copiex",
     "pegar": "Pegar con Copiex",
+    "pegar_varios": "Pegar con Copiex N destinos",
     "copiar_ayuda": "Marca estos elementos para copiarlos con Copiex",
     "pegar_ayuda": (
         "Copia aquí lo marcado con Copiex (o el portapapeles) con progreso, "
         "pausa y reanudación"
     ),
+    "pegar_varios_ayuda": (
+        "Copia a esta carpeta y a otras que elijas, leyendo el origen una sola vez"
+    ),
+    "destinos_titulo": "Destinos de la copia",
+    "destinos_ayuda": (
+        "Esta carpeta es el primer destino. Añade los demás y pulsa «Finalizar selección»."
+    ),
+    "anadir_destino": "Añadir otro destino",
+    "finalizar_seleccion": "Finalizar selección",
+    "elegir_destino_titulo": "¿Qué otra carpeta quieres como destino?",
 }
 _textos_menu = None
 
@@ -203,15 +216,51 @@ def _ruta_socket() -> str:
 
 
 def _arrancar_app(oculto: bool = True) -> bool:
-    """Arranca Copiex desde su fichero .desktop si aún no está en ejecución.
+    """Pide al bus de sesión que arranque Copiex.
 
-    Con oculto=True se inicia solo en la bandeja (esquina superior derecha), que
-    es lo que se espera al pulsar «Copiar con Copiex»; sin ventana delante.
+    Antes se lanzaba con subprocess desde el hilo que enviaba la petición. En
+    Nautilus ese fork puede tardar muchos segundos (o quedarse esperando), y
+    con él la copia no llega a empezar. Arrancándolo por D-Bus el fork lo hace
+    el bus, que es pequeño y de un solo hilo, y la llamada no bloquea.
+
+    Hace falta el servicio `com.copiex.Manager.service`, que instala
+    install.sh. Si no está, se recurre al lanzamiento directo.
     """
-    info = Gio.DesktopAppInfo.new(DESKTOP_ID)
-    if info is None:
-        return False
     try:
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        bus.call(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "StartServiceByName",
+            GLib.Variant("(su)", (APP_ID, 0)),
+            None,
+            Gio.DBusCallFlags.NONE,
+            3000,
+            None,
+            _arranque_contestado,
+            None,
+        )
+        return True
+    except Exception:
+        return _arrancar_app_directo(oculto)
+
+
+def _arranque_contestado(bus, resultado, _datos=None):
+    try:
+        bus.call_finish(resultado)
+    except GLib.Error as exc:
+        _traza(f"el bus no arrancó Copiex ({exc.message}); se lanza directamente")
+        GLib.idle_add(_arrancar_app_directo)
+    return False
+
+
+def _arrancar_app_directo(oculto: bool = True) -> bool:
+    """Respaldo sin D-Bus: lanza el .desktop desde el bucle principal."""
+    try:
+        info = Gio.DesktopAppInfo.new(DESKTOP_ID)
+        if info is None:
+            return False
         linea = info.get_commandline() or info.get_string("Exec") or ""
         argv = list(GLib.shell_parse_argv(linea)[1]) if linea else []
         argv = [a for a in argv if a and not a.startswith("%")]
@@ -229,11 +278,7 @@ def _arrancar_app(oculto: bool = True) -> bool:
         )
         return True
     except Exception:
-        try:
-            info.launch([], None)
-            return True
-        except Exception:
-            return False
+        return False
 
 
 def _enviar(mensaje: dict, espera_total: float = 12.0):
@@ -245,7 +290,8 @@ def _enviar(mensaje: dict, espera_total: float = 12.0):
     ruta = _ruta_socket()
     ultimo_error = None
     arrancada = False
-    limite = time.monotonic() + espera_total
+    inicio = time.monotonic()
+    limite = inicio + espera_total
     while True:
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -265,7 +311,10 @@ def _enviar(mensaje: dict, espera_total: float = 12.0):
                 respuesta = {}
             if not isinstance(respuesta, dict):
                 respuesta = {}
-            _traza(f"enviado {mensaje.get('cmd')} -> {respuesta}")
+            _traza(
+                f"enviado {mensaje.get('cmd')} en "
+                f"{time.monotonic() - inicio:.3f}s -> {respuesta}"
+            )
             return respuesta
         except OSError as exc:
             ultimo_error = exc
@@ -279,21 +328,171 @@ def _enviar(mensaje: dict, espera_total: float = 12.0):
     return None
 
 
-def _enviar_async(mensaje: dict, al_fallar=None):
-    """Envía en segundo plano; si no se puede (o la app rechaza), avisa."""
+class _Envio:
+    """Una petición al socket de Copiex, sin bloquear ni usar hilos.
 
-    def trabajo():
-        respuesta = _enviar(mensaje)
-        if al_fallar is None:
-            return
-        if respuesta is None:
-            GLib.idle_add(al_fallar, "No se pudo contactar con Copiex")
-        elif respuesta.get("ok") is False:
-            GLib.idle_add(
-                al_fallar, respuesta.get("error") or "Copiex rechazó la operación"
+    Antes cada envío corría en un hilo propio y, cuando Copiex no estaba
+    abierto, ese hilo lanzaba la aplicación con subprocess (fork desde
+    Nautilus). En Nautilus ese hilo podía quedarse esperando el GIL o el fork
+    durante minutos, y la copia no llegaba a empezar. Ahora todo son callbacks
+    del bucle principal: el socket es no bloqueante y el arranque lo hace el
+    bus de sesión.
+    """
+
+    ESPERA_MS = 20000
+    REINTENTO_MS = 200
+
+    def __init__(self, mensaje: dict, al_fallar=None):
+        self.cmd = mensaje.get("cmd")
+        self.al_fallar = al_fallar
+        self.inicio = time.monotonic()
+        self.sock = None
+        self.fuente = 0
+        self.reloj = 0
+        self.reintento = 0
+        self.hecho = False
+        self.lanzada = False
+        self.enviado = False
+        self.por_enviar = (json.dumps(mensaje) + "\n").encode("utf-8")
+        self.datos = b""
+        self.ultimo_error = None
+
+    # ------------------------------------------------------------------
+    def empezar(self):
+        _traza(f"enviando {self.cmd}...")
+        self.reloj = GLib.timeout_add(self.ESPERA_MS, self._agotado)
+        self._intentar()
+
+    def _intentar(self):
+        if self.hecho:
+            return False
+        self.reintento = 0
+        try:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.setblocking(False)
+            codigo = sock.connect_ex(_ruta_socket())
+        except OSError as exc:
+            self.ultimo_error = exc
+            sock = None
+            codigo = -1
+        if codigo in (0, errno.EINPROGRESS, errno.EAGAIN):
+            self.sock = sock
+            self.fuente = GLib.io_add_watch(sock, GLib.IO_OUT, self._escribible)
+            return False
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
+        if not self.lanzada:
+            self.lanzada = True
+            _traza("Copiex no está abierto; se pide al bus que lo arranque")
+            _arrancar_app()
+        self.reintento = GLib.timeout_add(self.REINTENTO_MS, self._intentar)
+        return False
+
+    def _escribible(self, sock, _condicion):
+        if self.hecho:
+            return False
+        try:
+            escritos = sock.send(self.por_enviar)
+        except BlockingIOError:
+            return True
+        except OSError as exc:
+            self._terminar(error=exc)
+            return False
+        self.por_enviar = self.por_enviar[escritos:]
+        if self.por_enviar:
+            return True
+        self.enviado = True
+        self._quitar_fuente()
+        self.fuente = GLib.io_add_watch(
+            sock, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, self._leible
+        )
+        return False
+
+    def _leible(self, sock, _condicion):
+        if self.hecho:
+            return False
+        try:
+            trozo = sock.recv(4096)
+        except BlockingIOError:
+            return True
+        except OSError as exc:
+            self._terminar(error=exc)
+            return False
+        if not trozo:
+            if b"\n" in self.datos:
+                self._terminar(texto=self.datos.split(b"\n", 1)[0])
+            else:
+                self._terminar(error="la conexión se cerró sin respuesta")
+            return False
+        self.datos += trozo
+        if b"\n" in self.datos:
+            self._terminar(texto=self.datos.split(b"\n", 1)[0])
+            return False
+        return True
+
+    def _agotado(self):
+        self.reloj = 0
+        if self.hecho:
+            return False
+        if self.enviado:
+            self._terminar(error="Copiex no respondió a tiempo")
+        else:
+            self._terminar(
+                error=f"no se pudo contactar ({self.ultimo_error or 'sin socket'})"
             )
+        return False
 
-    threading.Thread(target=trabajo, name="copiex-ipc", daemon=True).start()
+    # ------------------------------------------------------------------
+    def _quitar_fuente(self):
+        if self.fuente:
+            GLib.source_remove(self.fuente)
+            self.fuente = 0
+
+    def _terminar(self, texto=None, error=None):
+        if self.hecho:
+            return
+        self.hecho = True
+        self._quitar_fuente()
+        for nombre in ("reintento", "reloj"):
+            fuente = getattr(self, nombre)
+            if fuente:
+                GLib.source_remove(fuente)
+                setattr(self, nombre, 0)
+        if self.sock is not None:
+            try:
+                self.sock.close()
+            except OSError:
+                pass
+            self.sock = None
+        respuesta = {}
+        if texto:
+            try:
+                respuesta = json.loads(texto)
+            except ValueError:
+                respuesta = {}
+            if not isinstance(respuesta, dict):
+                respuesta = {}
+        if error is None:
+            _traza(
+                f"enviado {self.cmd} en "
+                f"{time.monotonic() - self.inicio:.3f}s -> {respuesta}"
+            )
+            if self.al_fallar is not None and respuesta.get("ok") is False:
+                self.al_fallar(
+                    respuesta.get("error") or "Copiex rechazó la operación"
+                )
+            return
+        _traza(f"sin contacto con Copiex ({self.cmd}): {error}")
+        if self.al_fallar is not None:
+            self.al_fallar("No se pudo contactar con Copiex")
+
+
+def _enviar_async(mensaje: dict, al_fallar=None):
+    """Envía la petición sin bloquear el bucle principal (ni usar hilos)."""
+    _Envio(mensaje, al_fallar).empezar()
 
 
 # ----------------------------------------------------------------------
@@ -449,32 +648,27 @@ def _al_copiar(uris: list):
     _enviar_async({"cmd": "ping"})
 
 
-def _al_pegar(destino: str):
-    """Lanza la copia con lo que haya en el portapapeles y, si la lectura no
-    responde a tiempo, con lo último marcado con «Copiar con Copiex». Solo se
-    envía una petición: los temporizadores y la lectura comparten el testigo."""
+def _con_origenes(accion):
+    """Averigua qué pegar y llama a `accion(uris)`.
+
+    Se lee el portapapeles y, si no responde a tiempo, se usa lo último marcado
+    con «Copiar con Copiex». Solo se entrega una vez: los temporizadores y la
+    lectura comparten el testigo.
+    """
     estado = {"hecho": False}
 
-    def enviar(uris):
+    def entregar(uris):
         if estado["hecho"] or not uris:
             return
         estado["hecho"] = True
-        _traza(f"pegar en {destino}: {len(uris)} origen(es) {uris[:3]}")
-
-        def fallo(motivo):
-            _traza(f"la aplicación rechazó la copia: {motivo}")
-            _aviso("No se pudo copiar con Copiex", str(motivo))
-
-        _enviar_async(
-            {"cmd": "copy", "sources": uris, "dest": destino}, al_fallar=fallo
-        )
+        accion(uris)
 
     def con_portapapeles(texto, mime=""):
         if estado["hecho"]:
             return
         uris = _uris_del_portapapeles(texto, mime)
         _traza(f"portapapeles: mime={mime!r} uris={len(uris)}")
-        enviar(uris or list(_seleccion))
+        entregar(uris or list(_seleccion))
 
     def con_lo_marcado():
         # La lectura del portapapeles no siempre contesta (Wayland, contenido
@@ -482,7 +676,7 @@ def _al_pegar(destino: str):
         if estado["hecho"] or not _seleccion:
             return False
         _traza("el portapapeles no respondió; se usa lo marcado con Copiex")
-        enviar(list(_seleccion))
+        entregar(list(_seleccion))
         return False
 
     def sin_nada():
@@ -500,6 +694,176 @@ def _al_pegar(destino: str):
     _leer_portapapeles(con_portapapeles)
     GLib.timeout_add(1500, con_lo_marcado)
     GLib.timeout_add(6000, sin_nada)
+
+
+def _al_pegar(destino: str):
+    """Pega en una sola carpeta (el comportamiento de siempre)."""
+
+    def copiar(uris):
+        _traza(f"pegar en {destino}: {len(uris)} origen(es) {uris[:3]}")
+
+        def fallo(motivo):
+            _traza(f"la aplicación rechazó la copia: {motivo}")
+            _aviso("No se pudo copiar con Copiex", str(motivo))
+
+        _enviar_async(
+            {"cmd": "copy", "sources": uris, "dest": destino}, al_fallar=fallo
+        )
+
+    _con_origenes(copiar)
+
+
+# ----------------------------------------------------------------------
+# varios destinos: ciclo de selección
+# ----------------------------------------------------------------------
+_SELECTORES = set()  # mantiene viva la ventana mientras se usa
+
+
+def _lanzar_copia_varios(uris, destinos):
+    """Pide a Copiex una copia a varias carpetas a la vez."""
+    _traza(f"pegar en {len(destinos)} destinos: {len(uris)} origen(es) {uris[:3]}")
+
+    def fallo(motivo):
+        _traza(f"la aplicación rechazó la copia a varios destinos: {motivo}")
+        _aviso("No se pudo copiar con Copiex", str(motivo))
+
+    _enviar_async(
+        {"cmd": "copy", "sources": uris, "dests": list(destinos)}, al_fallar=fallo
+    )
+
+
+class _SelectorDestinos:
+    """Acumula destinos: la carpeta pulsada es siempre el primero.
+
+    «Añadir otro destino» abre el selector de carpetas y, al elegir, vuelve
+    aquí; «Finalizar selección» lanza la copia. Cerrar la ventana cancela.
+    """
+
+    def __init__(self, primer_destino, uris):
+        self._uris = list(uris)
+        self._destinos = [primer_destino]
+        textos = _textos()
+        self._ventana = Gtk.Window(
+            title=textos.get("destinos_titulo", "Destinos de la copia")
+        )
+        self._ventana.set_default_size(520, 340)
+        self._ventana.set_modal(True)
+
+        caja = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        for lado in ("top", "bottom", "start", "end"):
+            getattr(caja, f"set_margin_{lado}")(16)
+        ayuda = Gtk.Label(
+            label=textos.get("destinos_ayuda", ""), wrap=True, xalign=0
+        )
+        caja.append(ayuda)
+
+        self._lista = Gtk.ListBox(css_classes=["boxed-list"])
+        self._lista.set_selection_mode(Gtk.SelectionMode.NONE)
+        scroll = Gtk.ScrolledWindow(child=self._lista, vexpand=True)
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        caja.append(scroll)
+
+        botones = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=8,
+            halign=Gtk.Align.END,
+        )
+        self._anadir = Gtk.Button(
+            label=textos.get("anadir_destino", "Añadir otro destino")
+        )
+        self._anadir.connect("clicked", self._al_anadir)
+        finalizar = Gtk.Button(
+            label=textos.get("finalizar_seleccion", "Finalizar selección"),
+            css_classes=["suggested-action"],
+        )
+        finalizar.connect("clicked", self._al_finalizar)
+        botones.append(self._anadir)
+        botones.append(finalizar)
+        caja.append(botones)
+
+        self._ventana.set_child(caja)
+        self._ventana.connect("close-request", self._al_cerrar)
+        _SELECTORES.add(self)
+        self._refrescar()
+        self._ventana.present()
+
+    # ------------------------------------------------------------------
+    def _refrescar(self):
+        while (fila := self._lista.get_row_at_index(0)) is not None:
+            self._lista.remove(fila)
+        for numero, uri in enumerate(self._destinos, 1):
+            fichero = Gio.File.new_for_uri(uri)
+            ruta = fichero.get_path() or uri
+            etiqueta = Gtk.Label(label=f"{numero}. {ruta}", xalign=0)
+            etiqueta.set_wrap(True)
+            fila = Gtk.ListBoxRow()
+            fila.set_child(etiqueta)
+            self._lista.append(fila)
+        self._anadir.set_sensitive(len(self._destinos) < 16)
+
+    def _al_anadir(self, *_):
+        textos = _textos()
+        dialogo = Gtk.FileDialog(
+            title=textos.get("elegir_destino_titulo", "Elige otra carpeta")
+        )
+        dialogo.select_folder(self._ventana, None, self._elegida)
+
+    def _elegida(self, dialogo, resultado, *_):
+        try:
+            carpeta = dialogo.select_folder_finish(resultado)
+        except GLib.Error:
+            return  # cancelado: se queda como estaba
+        uri = carpeta.get_uri() if carpeta is not None else None
+        if not uri:
+            return
+        if uri == self._destinos[0]:
+            _aviso(
+                "Esa ya es la primera carpeta",
+                "Elige otra ubicación para el segundo destino.",
+            )
+            return
+        if uri in self._destinos:
+            return  # ya estaba: no se repite
+        self._destinos.append(uri)
+        self._refrescar()
+
+    def _al_finalizar(self, *_):
+        if len(self._destinos) < 2:
+            _aviso(
+                "No has añadido ningún destino",
+                "Cierra esta ventana y usa «Pegar con Copiex» para copiar "
+                "solo en esta carpeta.",
+            )
+            return
+        destinos = list(self._destinos)
+        uris = list(self._uris)
+        # Se envía antes de cerrar la ventana: la petición sale ya y no queda
+        # detrás de la destrucción de la ventana modal.
+        _lanzar_copia_varios(uris, destinos)
+        self._cerrar()
+
+    def _al_cerrar(self, *_):
+        self._cerrar()
+        return True  # la ventana ya está destruida
+
+    def _cerrar(self):
+        _SELECTORES.discard(self)
+        ventana = self._ventana
+        # Destruir en cuanto vuelva el bucle principal: cerrar una ventana
+        # modal no debe retener al manejador que acaba de lanzar la copia.
+        GLib.idle_add(ventana.destroy)
+
+
+def _al_pegar_varios(destino: str):
+    """Abre el ciclo de selección de destinos para la carpeta pulsada."""
+    if Gtk is None:
+        _aviso("No se puede elegir varios destinos", "Falta GTK en Nautilus.")
+        return
+
+    def abrir(uris):
+        _SelectorDestinos(destino, uris)
+
+    _con_origenes(abrir)
 
 
 # ----------------------------------------------------------------------
@@ -530,7 +894,13 @@ class ExtencionCopiex(GObject.GObject, Nautilus.MenuProvider):
             tip=textos["pegar_ayuda"],
         )
         item.connect("activate", self._activar_pegar, destino)
-        return [item]
+        varios = Nautilus.MenuItem(
+            name="Copiex::pegar_varios",
+            label=textos.get("pegar_varios", "Pegar con Copiex N destinos"),
+            tip=textos.get("pegar_varios_ayuda", ""),
+        )
+        varios.connect("activate", self._activar_pegar_varios, destino)
+        return [item, varios]
 
     # ------------------------------------------------------------------
     def _activar_copiar(self, menu, uris):
@@ -538,3 +908,6 @@ class ExtencionCopiex(GObject.GObject, Nautilus.MenuProvider):
 
     def _activar_pegar(self, menu, destino):
         _al_pegar(destino)
+
+    def _activar_pegar_varios(self, menu, destino):
+        _al_pegar_varios(destino)

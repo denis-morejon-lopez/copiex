@@ -2,9 +2,11 @@
 
 Gestor de copias en Python + PyGObject (GTK 4 / libadwaita) para GNOME: icono de bandeja,
 extensión de Nautilus, historial en SQLite, pausa/cancelación, continuación por byte y
-reanudación automática. **Los ficheros y carpetas llevan nombres en inglés** (`sound.py`,
-`watcher.py`, `nautilus_extension.py`, `copiex-launcher`, `sounds/`, `icons/`); las clases,
-funciones y atributos internos siguen en español (`Vigilante`, `cargar()`, `texto()`).
+reanudación automática. Una copia puede repartirse a **varios destinos** leyendo el origen
+una sola vez (`Operacion.destinos`, `_copiar_a_varios`). **Los ficheros y carpetas llevan
+nombres en inglés** (`sound.py`, `watcher.py`, `nautilus_extension.py`, `copiex-launcher`,
+`sounds/`, `icons/`); las clases, funciones y atributos internos siguen en español
+(`Vigilante`, `cargar()`, `texto()`).
 
 **Antes de tocar nada, lee `TODO.md`** (estado real, requerimiento por requerimiento,
 trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 11 requerimientos y 4 errores;
@@ -27,8 +29,11 @@ mejorado. Queda una mejora menor:
 - **Si el menú de Nautilus no hace nada:** mira `~/.local/share/copiex/extension.log`
   (traza de copiar/pegar, MIME leído y respuesta de la app); los `print` de la
   extensión se pierden.
-- **No reintroduzcas los workers/hilos** (se retiraron del pliego el 13/11): se midieron, no mejoraban el
-  tiempo y el usuario pidió retirarlos. Ver «3 quinquies» en `TODO.md`.
+- **No reintroduzcas los workers/hilos de copia** (se retiraron del pliego el 13/11): se
+  midieron, no mejoraban el tiempo y el usuario pidió retirarlos. Ver «3 quinquies» en
+  `TODO.md`. La extensión de Nautilus tampoco usa hilos desde el 14/11: envía con `_Envio`
+  (callbacks de `GLib.io_add_watch`) y arranca la app por D-Bus. No vuelvas a un
+  `threading.Thread` ni a `subprocess.Popen` desde el menú.
 - Todo callback pasado a `GLib.idle_add` debe devolver `False`; si no, la acción se repite
   en bucle (ya pasó con las copias duplicadas).
 - Nunca hagas `os.path.exists`/`isdir` sobre rutas de usuario en el hilo de GTK: un
@@ -37,6 +42,10 @@ mejorado. Queda una mejora menor:
   `ps -eo pid,args | grep "[p]ython3 -m copiex"` y mátalo por PID.
 - Prueba siempre con base de datos y `XDG_CONFIG_HOME` temporales en `/tmp`; no toques el
   historial real de `~/.local/share/copiex/historial.db`.
+- **Varios destinos:** la carpeta donde se pulsa «Pegar con Copiex N destinos» es siempre
+  el primer destino; los demás se añaden en la ventana de selección. El progreso de la
+  operación es el mínimo de los destinos (no la suma) y el de cada destino vive en la tabla
+  `destinos`.
 - **Git:** el proyecto tiene repositorio (remoto `repo-copiex` en GitHub). **No hagas
   commit ni push** salvo que el usuario lo pida; y avísale de que la URL del remoto lleva un
   token incrustado en `.git/config`, que debería rotar.
@@ -46,15 +55,17 @@ mejorado. Queda una mejora menor:
 `~/.local/share/copiex/copiex.log` es el fichero que el usuario envía cuando algo falla:
 se escribe en DEBUG, conserva **una semana** (poda al arrancar y cada hora, tope 32 MiB) e
 incluye las acciones de Nautilus como `Nautilus: …`. `extension.log` solo recoge lo que
-pasa cuando la aplicación no está arrancada. El diseño está en `copiex/logs.py` y en la
-sección «3 octies» de `TODO.md`.
+pasa cuando la aplicación no está arrancada. El envío sin hilos deja las etapas
+`enviando <cmd>...`, `Copiex no está abierto; se pide al bus que lo arranque`,
+`enviado <cmd> en X s -> {...}` o `sin contacto con Copiex (<cmd>): ...`. El diseño está en
+`copiex/logs.py` y en la sección «3 octies» de `TODO.md`.
 
 ## Comandos
 
 ```bash
 ./copiex-launcher                      # abre la ventana
 ./copiex-launcher --bandeja            # solo bandeja (sin ventana)
-./install.sh && nautilus -q            # instala/recarga la extensión de Nautilus
+./install.sh && nautilus -q            # extensión, servicio D-Bus, iconos; luego recarga Nautilus
 ./uninstall.sh --simular              # qué borraría (no toca nada)
 ./uninstall.sh                        # desinstala todo (pregunta; --conservar-datos/--si)
 python3 -m py_compile copiex/*.py      # comprobación rápida
@@ -82,17 +93,19 @@ Lanzar la GUI desde un terminal sin bloquear:
 - `copiex/window.py`: además del historial, la cabecera lleva el icono a 22 px justo
   después del título «Copiex» (`Gtk.Box` con `Adw.WindowTitle` + `Gtk.Image`).
 - `copiex/util.py`: rutas y `icono_disponible()` (icono propio o `edit-copy`).
-- `copiex/engine.py`: motor de copia (`Operacion`, `Motor`), bloques de 1 MiB con
-  `os.copy_file_range` (reserva a lectura/escritura si el sistema de ficheros no lo
-  admite), continuación por byte.
-- `copiex/store.py`: SQLite del historial. `copiex/watcher.py`: reanudación automática cada 6 s.
+- `copiex/engine.py`: motor de copia (`Operacion`, `Motor`, `DestinoCopia`), bloques de
+  1 MiB con `os.copy_file_range` (reserva a lectura/escritura si el sistema de ficheros no
+  lo admite), continuación por byte y reparto a varios destinos con una sola lectura.
+- `copiex/store.py`: historial SQLite, incluida la tabla `destinos` con la cola de cada
+  carpeta destino. `copiex/watcher.py`: reanudación automática cada 6 s.
 - `copiex/app.py` + `copiex/window.py`: aplicación y ventana del historial.
-- `icons/`: icono propio (`com.copiex.Manager.svg` y la variante `-symbolic` que usa la
-  bandeja). Lo instala `./install.sh` en el tema `hicolor`; si no está, la bandeja cae en
-  `edit-copy`. Las propuestas descartadas viven en `brand/`.
 - `copiex/sound.py`: alerta de fin de copia. El audio está en `sounds/` (manda
   `copy-finished.*`; si no, el primer audio de la carpeta): para cambiar la alarma se
   sustituye ese fichero, no el código. «Eliminar» solo oculta la fila, nunca borra el
   historial.
 - `copiex/tray.py`: icono de bandeja (StatusNotifierItem). `copiex/ipc.py`: socket Unix.
-- `copiex/nautilus_extension.py`: extensión de Nautilus (menú, portapapeles, arranque).
+- `copiex/nautilus_extension.py`: extensión de Nautilus (menú, portapapeles, arranque y
+  el ciclo de «Pegar con Copiex N destinos», clase `_SelectorDestinos`). Las peticiones
+  se envían **sin hilos** (`_Envio`, callbacks de `GLib.io_add_watch`) y el arranque se
+  pide por D-Bus al servicio `com.copiex.Manager`, que instala `install.sh`
+  (`~/.local/share/dbus-1/services/com.copiex.Manager.service`).
