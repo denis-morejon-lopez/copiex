@@ -37,3 +37,16 @@ momento de desconexión aparece algún botón para cancelar la copia si se quisi
 3- Veo cuando copio varios ficheros se hacen muy lentas las copias. Debe mejorar el algoritmo de copia para minimizar el tiempo total de copia.
 4- Cuando Copiex no está en ejecución, y doy clic derecho sobre un archivo y selecciono:  "Copiar con Copiex". Y luego en el dispositivo destino doy clic derecho "¨Pegar con Copiex"
 no veo que active e inicie la aplicación, y debería hacerlo.
+
+### Estado de implementación (16/11/2026)
+
+Los 12 requerimientos y los 4 errores están resueltos y probados. El 16/11 se añadieron el
+requerimiento 12 (copiar hacia/desde `mtp://`), «Cortar con Copiex» (mueve: copia y borra
+los orígenes al terminar, también con «Pegar con Copiex N destinos») y el icono a color en
+la bandeja (la «C» blanca sobre verde). El detalle técnico, las pruebas y el estado exacto
+al cerrar la sesión están en `TODO.md`; las reglas de trabajo, en `AGENTS.md`.
+
+Queda solo la prueba del usuario desde el menú real de Nautilus (cortar a una y a varias
+carpetas) y confirmar que el icono del panel ya es el verde. El código del 16/11 está
+commiteado en `ee884ac`; sin commitear quedan la documentación actualizada y un cambio de
+`menu.yaml`. No se debe hacer commit ni push sin pedirlo.

@@ -2,10 +2,11 @@
 
 Estado del trabajo al **16 de noviembre de 2026**: el 14/11 quedaron instalados el arreglo
 del destino borrado durante una pausa y el arranque de Copiex desde Nautilus (envío sin
-hilos y activación por D-Bus); el 16/11 se añadió el **requerimiento 12 (MTP)**, probado
-con un Android real en ambos sentidos. Este fichero y `NOTES.md` son todo lo que necesita
-una sesión nueva: el asistente no conserva memoria entre chats, y este resumen evita
-tener que releer el historial de la conversación anterior.
+hilos y activación por D-Bus); el 16/11 se añadieron el **requerimiento 12 (MTP)**,
+probado con un Android real en ambos sentidos, **«Cortar con Copiex»** (mover de verdad) y
+el **icono a color en la bandeja** (la «C» blanca sobre verde). Este fichero y `NOTES.md`
+son todo lo que necesita una sesión nueva: el asistente no conserva memoria entre chats, y
+este resumen evita tener que releer el historial de la conversación anterior.
 
 **Resumen en una línea:** Copiex está terminado: los 12 requerimientos del pliego y los 4
 errores están resueltos (bandeja, extensión de Nautilus, historial SQLite con reanudación
@@ -30,11 +31,30 @@ Abre el proyecto en Freebuff y pega algo como:
 > `AGENTS.md` (textos en `menu.yaml`, nombres de fichero en inglés, sin workers, sin
 > `pkill -f`). Antes de tocar el motor o la extensión, lee 3 ter, 3 quindecies y
 > 3 septendecies: el 14/11 se corrigieron el destino borrado durante la pausa y el
-> arranque sin hilos por D-Bus, y el 16/11 se añadieron MTP y «Cortar con Copiex». No
-> queda trabajo pendiente salvo tu prueba real del menú de Nautilus (sección 4). No hagas
-> commit ni push sin pedírmelo.
+> arranque sin hilos por D-Bus, y el 16/11 se añadieron MTP, «Cortar con Copiex» y el
+> icono a color en la bandeja. No queda trabajo pendiente salvo tu prueba real del menú de
+> Nautilus y del icono (sección 4). No hagas commit ni push sin pedírmelo.
 
 La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hechas.
+
+### Estado exacto al cerrar la sesión del 16/11
+
+- **Git:** último commit **`ee884ac`** «Implementamos: a) Cortar y pegar b) Cambiar el
+  icono de la esquina a color: verde», que ya incluye el código de MTP, «Cortar con
+  Copiex» y el icono de bandeja. Quedan **sin commitear** esta documentación actualizada y
+  un cambio de `menu.yaml` (la descripción de «Acerca de», acortada por el usuario).
+- **En marcha:** la app quedó en la bandeja (PID 26733 al escribir esto; el PID cambia,
+  comprobar con `ps -eo pid,args | grep "[p]ython3 -m copiex"`) y Nautilus recargado con la
+  extensión instalada idéntica a la fuente.
+- **Historial real:** 36 filas y 9 en `destinos`; la migración de la columna `mover` ya se
+  aplicó al abrir la app. No se tocó ninguna fila en las pruebas (se usaron BD en `/tmp`).
+- **Cerrado y probado:** MTP en ambos sentidos; «Cortar» a uno y a N destinos (motor, IPC y
+  extensión); el icono de la bandeja anuncia `com.copiex.Manager` (color).
+- **Pendiente del usuario:** probar «Cortar con Copiex» desde el menú real (a una carpeta y
+  con «N destinos») y confirmar que en el panel ya se ve la «C» verde. Mover hacia/desde
+  MTP y mover carpetas vacías quedan como mejoras opcionales.
+- **Siguiente paso:** si no pide algo nuevo, esperar esa prueba; no rehacer lo ya verificado
+  ni hacer commit/push sin que lo pida.
 
 ## 2. Qué está hecho y verificado
 
@@ -51,13 +71,13 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
 | Reanudación automática (requerimiento 8, errores 1 y 2) | **Hecho el 12/11.** La copia continúa sola cuando vuelven origen y destino, también tras cerrar la aplicación; las pausas manuales se respetan y las filas con error se pueden reintentar o cancelar. Detalles en 3 quater. |
 | Arranque de Copiex al pulsar «Copiar con Copiex» | **Hecho el 12/11 y reforzado el 14/11.** Si no estaba en marcha, se arranca solo en la bandeja, sin abrir ventana. Desde el 14/11 lo pide al bus de sesión (servicio `com.copiex.Manager` que instala `install.sh`): **0,404 s** en frío. |
 | Latencia al pegar | **Medida el 12/11; re-medida el 14/11.** Antes 1,57 s en frío y hasta ~4 s con los reintentos ciegos; ahora **0,003 s** con la app abierta y **0,404 s** en frío por D-Bus. Detalles en 3 ter. |
-| Historial de la base de datos | 35 filas al 14/11 (27 `done`, 4 `error`, 4 `cancelled`) y 9 filas en `destinos`, todas copias reales del usuario. Columnas de `copias`: `id, origenes, destino, total_bytes, copiados_bytes, total_archivos, copiados_archivos, estado, error, creado, actualizado, pausa_manual`. Tabla `destinos` (desde el 13/11): una fila por carpeta destino con su progreso y estado; en `copias.destino` se guarda el primero. |
+| Historial de la base de datos | **36 filas al 16/11** y 9 filas en `destinos`, todas copias reales del usuario. Columnas de `copias`: `id, origenes, destino, total_bytes, copiados_bytes, total_archivos, copiados_archivos, estado, error, pausa_manual, mover, creado, actualizado` (`mover` se añadió el 16/11 con migración automática). Tabla `destinos` (desde el 13/11): una fila por carpeta destino con su progreso y estado; en `copias.destino` se guarda el primero. |
 | «Acerca de» + `menu.yaml` (requerimientos 10 y 11) | **Hecho el 13/11.** Acción `app.acerca` con `Adw.AboutDialog` (versión de `copiex/__init__.py` y descripción de `menu.yaml`); menús de ventana, bandeja y Nautilus, y los diálogos de origen/destino, leen sus textos de `menu.yaml` mediante `copiex/menu.py` (lector YAML propio, con caché y valores por defecto). Detalles en 3 decies. |
 | Alerta sonora y «Eliminar» (requerimiento 9) | **Hecho el 13/11.** `copiex/sound.py` reproduce el audio de `sounds/` (manda `copy-finished.*`) una sola vez por copia terminada; «Cancelar» deja paso a «Eliminar», que quita la fila sin borrar el historial. El usuario confirmó que la alarma suena. Detalles en 3 undecies. |
 | Nombres de ficheros y carpetas en inglés | **Hecho el 13/11.** `sound.py`, `watcher.py`, `nautilus_extension.py`, `copiex-launcher`, `sounds/`, `TODO.md`, `NOTES.md`. Los identificadores internos (clases, funciones, atributos) siguen en español a propósito. |
 | Error 3: copias de muchos ficheros | **Medido y mejorado el 13/11.** −20 % de tiempo y −22 % de CPU en 2 000 ficheros de 4 KiB, −14 % en un fichero de 256 MiB: `os.copy_file_range`, un `stat` por fichero al planificar y carpetas memorizadas. Detalles en 3 duodecies. |
 | Bandeja sin ventana abierta | **Corregido el 13/11.** El icono ofrecía «Ocultar ventana» aunque la ventana no existiera; ahora dice «Mostrar ventana» y se refresca al abrir/ocultar. Detalles en 3 terdecies. |
-| Icono propio y cabecera | **Hecho el 13/11.** «C» turquesa con barra de progreso (`icons/`), instalado en el tema `hicolor`; la bandeja usa la variante simbólica y la cabecera lo muestra a 22 px tras «Copiex». Detalles en 3 quaterdecies. |
+| Icono propio y cabecera | **Hecho el 13/11; bandeja corregida el 16/11.** «C» turquesa con barra de progreso (`icons/`), instalado en el tema `hicolor`; la cabecera lo muestra a 22 px tras «Copiex». La bandeja usaba la variante simbólica y se veía como un punto con una barrita; desde el 16/11 usa el icono a color (`com.copiex.Manager`). Detalles en 3 quaterdecies. |
 | Copia a varios destinos | **Hecho el 13/11.** Una operación, varias carpetas destino y **una sola lectura** del origen: cada bloque se escribe en todos los destinos a la vez. Cada destino tiene su cola visible en la ventana, su progreso en la BD, y se reanuda solo si su carpeta desaparece. En Nautilus: «Pegar con Copiex N destinos». Detalles en 3 quindecies. |
 | Destino borrado o truncado durante la pausa | **Corregido el 14/11.** Antes se seguía escribiendo en el inodo ya borrado: el progreso mentía y la operación quedaba en `running`. Ahora se comprueba el fichero antes de cada bloque, el progreso baja a lo que queda en disco (0 si se borró) y el destino se reintenta al terminar el resto; los botones pasan a «Eliminar» solo con todo completo. Detalles y pruebas en 3 quindecies. |
 | Arranque desde Nautilus sin hilos | **Hecho el 14/11.** La extensión ya no envía desde un `threading.Thread` (se quedaba esperando el GIL) ni lanza Copiex con `subprocess.Popen` (fork desde Nautilus): `_Envio` usa callbacks de `GLib.io_add_watch` y el arranque lo hace el bus de sesión. Medido: 0,404 s en frío y 0,003 s con la app abierta. Detalles en 3 ter. |
@@ -523,10 +543,11 @@ turquesa con una barra de progreso debajo. Quedó instalado así:
 
 Comprobado: la cabecera muestra `com.copiex.Manager` a 22 px tras «Copiex» y, con
 `XDG_DATA_HOME` temporal (sin los iconos instalados), cae en `edit-copy`; el tema de iconos
-encuentra los dos nombres (`has_icon`), el `IconName` que
-publica la bandeja por D-Bus es `com.copiex.Manager-symbolic` (tooltip incluido), y la app
-rearrancada en bandeja no da errores. El aspecto en el panel y en el dock no se ha podido
-ver desde aquí (Wayland): lo mira el usuario.
+encuentra los dos nombres (`has_icon`). Hasta el 16/11 el `IconName` que la bandeja
+publicaba por D-Bus era `com.copiex.Manager-symbolic` y el usuario veía un punto con una
+barrita; ahora `Bandeja.ICONO` es `com.copiex.Manager` y la consulta D-Bus devuelve el
+icono a color (tooltip incluido). La app rearrancada en bandeja no da errores. El aspecto
+en el panel y en el dock no se ha podido ver desde aquí (Wayland): lo mira el usuario.
 
 ## 3 quindecies. Copia a varios destinos en una sola lectura (13/11)
 
@@ -827,16 +848,18 @@ y mover hacia/desde MTP.
 
 Ubuntu 26.04 «resolute», GNOME 50.1, Nautilus 50.2.2, GTK 4.22.4, PyGObject 3.56.2,
 Wayland. El 16/11 había un Android montado por MTP (`gvfsd-mtp` y `gvfs-fuse` 1.60). El
-proyecto **es un repositorio git** (rama `main`; último commit `c78d28e` «Ajustes
-generales»; remoto `repo-copiex` en GitHub). **Todo el trabajo del 13, 14 y 16/11 está sin
-commitear**: motor de varios destinos y sus arreglos, MTP (`util`, `engine`), `store`,
-`window`, `app`, `ipc`, `menu`, extensión reescrita sin hilos, `install.sh`,
-`uninstall.sh`, `com.copiex.Manager.service.in` (nuevo), `menu.yaml`, `TODO.md`,
-`AGENTS.md` y varios `.pyc` de `copiex/__pycache__/` que no conviene commitear.
+proyecto **es un repositorio git** (rama `main`; último commit **`ee884ac`** «Implementamos:
+a) Cortar y pegar b) Cambiar el icono de la esquina a color: verde»; remoto `repo-copiex`
+en GitHub). Ese commit ya guarda el código del 13, 14 y 16/11: motor de varios destinos,
+MTP, «Cortar», icono de bandeja, extensión sin hilos, `install.sh`, etc. **Sin commitear
+quedan solo** `TODO.md`, `AGENTS.md`, `NOTES.md` y un cambio de `menu.yaml` (descripción
+más corta de «Acerca de», hecho por el usuario).
 Historial real al cerrar la sesión: 36 filas y 9 filas en `destinos`. La app quedó en
-marcha (el PID cambia; comprobar con `ps -eo pid,args | grep "[p]ython3 -m copiex"`),
-reiniciada el 16/11 para estrenar MTP y «Cortar con Copiex», y Nautilus recargado
-(`nautilus -q`) con la extensión idéntica a la fuente. **Aviso de seguridad:** la URL del remoto guarda un
+marcha en la bandeja (pid 26733 al escribir esto; el PID cambia, comprobar con
+`ps -eo pid,args | grep "[p]ython3 -m copiex"`), reiniciada el 16/11 para estrenar MTP,
+«Cortar con Copiex» y el icono a color, y Nautilus recargado (`nautilus -q`) con la
+extensión idéntica a la fuente. Los `.pyc` de `copiex/__pycache__/` se colaron en el
+commit `ee884ac`; no aportan nada y conviene sacarlos del control de versiones. **Aviso de seguridad:** la URL del remoto guarda un
 token de GitHub incrustado en `.git/config`; conviene rotarlo y usar un ayudante de
 credenciales. No hagas commit ni push sin que el usuario lo pida.
 

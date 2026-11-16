@@ -11,7 +11,7 @@
 
 aplicacion:
   nombre: Copiex
-  descripcion: Copia ficheros y carpetas con cola propia, progreso, pausa y reanudación, integrada en Nautilus. Las copias siguen solas tras cerrar la aplicación o desconectar un dispositivo.
+  descripcion: Copia ficheros y carpetas con cola propia, progreso, pausa y reanudación, integrada en Nautilus.
 
 menu:
   nueva: Nueva copia

@@ -18,6 +18,12 @@ Los 12 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11)
 (muchos ficheros) está medido y mejorado, y «Cortar con Copiex» mueve de verdad desde el
 16/11. No hay trabajo pendiente.
 
+**Estado al 16/11/2026:** último commit `ee884ac` (ya incluye MTP, «Cortar» y el icono de
+bandeja a color). Sin commitear quedan `TODO.md`, `AGENTS.md`, `NOTES.md` y un cambio de
+`menu.yaml` (descripción más corta de «Acerca de»). La app quedó en la bandeja (el PID
+cambia) y Nautilus recargado. Falta solo la prueba del usuario con el menú real (cortar a
+una y a N carpetas) y confirmar el icono verde en el panel; no rehacer lo ya verificado.
+
 ## Reglas que no se negocian
 
 - **Los textos de la interfaz viven en `menu.yaml`** (raíz), no en el código: nombres de
