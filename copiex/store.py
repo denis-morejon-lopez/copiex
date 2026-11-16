@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS copias (
     estado          TEXT    NOT NULL,
     error           TEXT,
     pausa_manual    INTEGER NOT NULL DEFAULT 0,
+    mover           INTEGER NOT NULL DEFAULT 0,
     creado          REAL    NOT NULL,
     actualizado     REAL    NOT NULL
 );
@@ -78,10 +79,18 @@ class Store:
             self._conn.execute(
                 "ALTER TABLE copias ADD COLUMN pausa_manual INTEGER NOT NULL DEFAULT 0"
             )
+        if "mover" not in columnas:
+            self._conn.execute(
+                "ALTER TABLE copias ADD COLUMN mover INTEGER NOT NULL DEFAULT 0"
+            )
 
     # ------------------------------------------------------------------
-    def crear(self, origenes, destinos) -> int:
-        """Crea la copia y sus destinos (una fila por carpeta de destino)."""
+    def crear(self, origenes, destinos, mover=False) -> int:
+        """Crea la copia y sus destinos (una fila por carpeta de destino).
+
+        `mover` marca un «Cortar»: se guarda con la copia para que el borrado
+        de los orígenes siga siendo un movimiento tras reabrir la aplicación.
+        """
         if isinstance(destinos, str):
             destinos = [destinos]
         destinos = list(destinos)
@@ -90,9 +99,16 @@ class Store:
         ahora = time.time()
         with self._lock:
             cur = self._conn.execute(
-                "INSERT INTO copias (origenes, destino, estado, creado, actualizado)"
-                " VALUES (?, ?, 'running', ?, ?)",
-                (json.dumps(list(origenes)), destinos[0], ahora, ahora),
+                "INSERT INTO copias"
+                " (origenes, destino, estado, mover, creado, actualizado)"
+                " VALUES (?, ?, 'running', ?, ?, ?)",
+                (
+                    json.dumps(list(origenes)),
+                    destinos[0],
+                    1 if mover else 0,
+                    ahora,
+                    ahora,
+                ),
             )
             op_id = int(cur.lastrowid)
             self._conn.executemany(

@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """Extensión de Nautilus para Copiex.
 
-Añade tres entradas al menú contextual de Nautilus:
+Añade cuatro entradas al menú contextual de Nautilus:
 
   * «Copiar con Copiex»           → sobre la selección (marca los orígenes)
+  * «Cortar con Copiex»           → como copiar, pero los orígenes se borran
+                                    cuando la copia termina en todos los destinos
   * «Pegar con Copiex»            → sobre la carpeta de destino (lanza la copia)
   * «Pegar con Copiex N destinos» → copia a esa carpeta y a otras elegidas
 
@@ -100,8 +102,10 @@ MIMES_LECTURA = (
 )
 ACCIONES = ("copy", "cut")
 
-# Últimos elementos marcados con «Copiar con Copiex» (memoria de la extensión)
+# Últimos elementos marcados con «Copiar/Cortar con Copiex» (memoria de la
+# extensión) y qué hacer con ellos si el portapapeles no contesta.
 _seleccion: list = []
+_seleccion_accion = "copy"  # copy | cut
 
 # Textos de los ítems del menú. Se leen de menu.yaml (requerimiento 11) a través
 # de la ruta del lanzador que hay en el .desktop; si no se encuentra, se usan
@@ -109,9 +113,14 @@ _seleccion: list = []
 # el paquete copiex y repite el lector mínimo a propósito.
 _TEXTO_DEFECTO = {
     "copiar": "Copiar con Copiex",
+    "cortar": "Cortar con Copiex",
     "pegar": "Pegar con Copiex",
     "pegar_varios": "Pegar con Copiex N destinos",
     "copiar_ayuda": "Marca estos elementos para copiarlos con Copiex",
+    "cortar_ayuda": (
+        "Mueve estos elementos con Copiex: se copian y, al terminar, se "
+        "borran los originales"
+    ),
     "pegar_ayuda": (
         "Copia aquí lo marcado con Copiex (o el portapapeles) con progreso, "
         "pausa y reanudación"
@@ -530,6 +539,22 @@ def _marcar_portapapeles(uris: list, accion: str = "copy"):
         pass
 
 
+def _accion_del_portapapeles(texto: str, mime: str = "") -> str:
+    """Devuelve «cut» o «copy» según la cabecera del portapapeles de Nautilus.
+
+    Ctrl+X publica `cut` en la primera línea; el resto de formatos (uri-list,
+    texto plano) no distinguen, así que se tratan como copia.
+    """
+    if not texto or (mime or "").lower() not in (MIME_COPIADOS, MIME_ANTIGUO):
+        return "copy"
+    for linea in texto.splitlines():
+        linea = linea.strip()
+        if not linea or linea.startswith("#"):
+            continue
+        return "cut" if linea.lower() == "cut" else "copy"
+    return "copy"
+
+
 def _uris_del_portapapeles(texto: str, mime: str = "") -> list:
     """Extrae las URI file:// del contenido del portapapeles, sea cual sea el
     formato en que llegue (gnome-copied-files, uri-list o texto plano).
@@ -547,7 +572,7 @@ def _uris_del_portapapeles(texto: str, mime: str = "") -> list:
     mime = (mime or "").lower()
     if lineas and lineas[0].lower() in ACCIONES + (MIME_ANTIGUO,):
         lineas = lineas[1:]  # cabecera de acción
-    uris = [l for l in lineas if l.startswith("file://")]
+    uris = [l for l in lineas if l.lower().startswith(("file://", "mtp://"))]
     if mime in (MIME_COPIADOS, MIME_URIS, MIME_ANTIGUO):
         return uris
     # texto plano: solo vale si no sobra nada (una ruta suelta no es una copia)
@@ -640,35 +665,56 @@ def _aviso(texto: str, detalle: str = ""):
 # acciones del menú
 # ----------------------------------------------------------------------
 def _al_copiar(uris: list):
-    global _seleccion
+    global _seleccion, _seleccion_accion
     _seleccion = list(uris)
+    _seleccion_accion = "copy"
     _traza(f"copiar con Copiex: {len(_seleccion)} elemento(s) {_seleccion[:3]}")
-    _marcar_portapapeles(_seleccion)
+    _marcar_portapapeles(_seleccion, "copy")
     # Al copiar se deja Copiex en marcha en la bandeja (si no lo estaba).
     _enviar_async({"cmd": "ping"})
 
 
-def _con_origenes(accion):
-    """Averigua qué pegar y llama a `accion(uris)`.
+def _al_cortar(uris: list):
+    """Marca la selección como «cortar»: al pegar se copia y se borra el origen."""
+    global _seleccion, _seleccion_accion
+    _seleccion = list(uris)
+    _seleccion_accion = "cut"
+    _traza(f"cortar con Copiex: {len(_seleccion)} elemento(s) {_seleccion[:3]}")
+    # También con la cabecera «cut»: un Ctrl+V normal de Nautilus movería.
+    _marcar_portapapeles(_seleccion, "cut")
+    _enviar_async({"cmd": "ping"})
 
-    Se lee el portapapeles y, si no responde a tiempo, se usa lo último marcado
-    con «Copiar con Copiex». Solo se entrega una vez: los temporizadores y la
-    lectura comparten el testigo.
+
+def _con_origenes(accion):
+    """Averigua qué pegar y llama a `accion(uris, modo)`.
+
+    `modo` es «copy» o «cut»: se lee de la cabecera del portapapeles (así un
+    Ctrl+X de Nautilus también se mueve) y, si no hay nada, de la última marca
+    de «Copiar/Cortar con Copiex». Solo se entrega una vez: los temporizadores y
+    la lectura comparten el testigo.
     """
     estado = {"hecho": False}
 
-    def entregar(uris):
+    def entregar(uris, modo):
         if estado["hecho"] or not uris:
             return
         estado["hecho"] = True
-        accion(uris)
+        accion(uris, modo)
 
     def con_portapapeles(texto, mime=""):
         if estado["hecho"]:
             return
         uris = _uris_del_portapapeles(texto, mime)
-        _traza(f"portapapeles: mime={mime!r} uris={len(uris)}")
-        entregar(uris or list(_seleccion))
+        if not uris:
+            modo = _seleccion_accion
+        elif (mime or "").lower() not in (MIME_COPIADOS, MIME_ANTIGUO):
+            # El formato no dice si fue copiar o cortar: si son los mismos
+            # elementos que se marcaron, vale la última acción de Copiex.
+            modo = _seleccion_accion if uris == list(_seleccion) else "copy"
+        else:
+            modo = _accion_del_portapapeles(texto, mime)
+        _traza(f"portapapeles: mime={mime!r} uris={len(uris)} modo={modo}")
+        entregar(uris or list(_seleccion), modo)
 
     def con_lo_marcado():
         # La lectura del portapapeles no siempre contesta (Wayland, contenido
@@ -676,7 +722,7 @@ def _con_origenes(accion):
         if estado["hecho"] or not _seleccion:
             return False
         _traza("el portapapeles no respondió; se usa lo marcado con Copiex")
-        entregar(list(_seleccion))
+        entregar(list(_seleccion), _seleccion_accion)
         return False
 
     def sin_nada():
@@ -697,20 +743,23 @@ def _con_origenes(accion):
 
 
 def _al_pegar(destino: str):
-    """Pega en una sola carpeta (el comportamiento de siempre)."""
+    """Pega en una sola carpeta (copia o movimiento, según la marca)."""
 
-    def copiar(uris):
-        _traza(f"pegar en {destino}: {len(uris)} origen(es) {uris[:3]}")
+    def pegar(uris, modo):
+        _traza(
+            f"pegar en {destino}: {len(uris)} origen(es) {uris[:3]} modo={modo}"
+        )
 
         def fallo(motivo):
             _traza(f"la aplicación rechazó la copia: {motivo}")
             _aviso("No se pudo copiar con Copiex", str(motivo))
 
-        _enviar_async(
-            {"cmd": "copy", "sources": uris, "dest": destino}, al_fallar=fallo
-        )
+        mensaje = {"cmd": "copy", "sources": uris, "dest": destino}
+        if modo == "cut":
+            mensaje["move"] = True
+        _enviar_async(mensaje, al_fallar=fallo)
 
-    _con_origenes(copiar)
+    _con_origenes(pegar)
 
 
 # ----------------------------------------------------------------------
@@ -719,17 +768,21 @@ def _al_pegar(destino: str):
 _SELECTORES = set()  # mantiene viva la ventana mientras se usa
 
 
-def _lanzar_copia_varios(uris, destinos):
-    """Pide a Copiex una copia a varias carpetas a la vez."""
-    _traza(f"pegar en {len(destinos)} destinos: {len(uris)} origen(es) {uris[:3]}")
+def _lanzar_copia_varios(uris, destinos, modo="copy"):
+    """Pide a Copiex una copia (o movimiento) a varias carpetas a la vez."""
+    _traza(
+        f"pegar en {len(destinos)} destinos: {len(uris)} origen(es) {uris[:3]} "
+        f"modo={modo}"
+    )
 
     def fallo(motivo):
         _traza(f"la aplicación rechazó la copia a varios destinos: {motivo}")
         _aviso("No se pudo copiar con Copiex", str(motivo))
 
-    _enviar_async(
-        {"cmd": "copy", "sources": uris, "dests": list(destinos)}, al_fallar=fallo
-    )
+    mensaje = {"cmd": "copy", "sources": uris, "dests": list(destinos)}
+    if modo == "cut":
+        mensaje["move"] = True
+    _enviar_async(mensaje, al_fallar=fallo)
 
 
 class _SelectorDestinos:
@@ -739,8 +792,9 @@ class _SelectorDestinos:
     aquí; «Finalizar selección» lanza la copia. Cerrar la ventana cancela.
     """
 
-    def __init__(self, primer_destino, uris):
+    def __init__(self, primer_destino, uris, modo="copy"):
         self._uris = list(uris)
+        self._modo = modo
         self._destinos = [primer_destino]
         textos = _textos()
         self._ventana = Gtk.Window(
@@ -793,7 +847,11 @@ class _SelectorDestinos:
             self._lista.remove(fila)
         for numero, uri in enumerate(self._destinos, 1):
             fichero = Gio.File.new_for_uri(uri)
-            ruta = fichero.get_path() or uri
+            if uri.lower().startswith("mtp://"):
+                # La ruta de gvfs-fuse no dice nada; la URI, sin %20, sí.
+                ruta = fichero.get_parse_name()
+            else:
+                ruta = fichero.get_path() or uri
             etiqueta = Gtk.Label(label=f"{numero}. {ruta}", xalign=0)
             etiqueta.set_wrap(True)
             fila = Gtk.ListBoxRow()
@@ -839,7 +897,7 @@ class _SelectorDestinos:
         uris = list(self._uris)
         # Se envía antes de cerrar la ventana: la petición sale ya y no queda
         # detrás de la destrucción de la ventana modal.
-        _lanzar_copia_varios(uris, destinos)
+        _lanzar_copia_varios(uris, destinos, self._modo)
         self._cerrar()
 
     def _al_cerrar(self, *_):
@@ -860,8 +918,8 @@ def _al_pegar_varios(destino: str):
         _aviso("No se puede elegir varios destinos", "Falta GTK en Nautilus.")
         return
 
-    def abrir(uris):
-        _SelectorDestinos(destino, uris)
+    def abrir(uris, modo):
+        _SelectorDestinos(destino, uris, modo)
 
     _con_origenes(abrir)
 
@@ -881,7 +939,13 @@ class ExtencionCopiex(GObject.GObject, Nautilus.MenuProvider):
             tip=textos["copiar_ayuda"],
         )
         item.connect("activate", self._activar_copiar, uris)
-        return [item]
+        cortar = Nautilus.MenuItem(
+            name="Copiex::cortar",
+            label=textos.get("cortar", "Cortar con Copiex"),
+            tip=textos.get("cortar_ayuda", ""),
+        )
+        cortar.connect("activate", self._activar_cortar, uris)
+        return [item, cortar]
 
     def get_background_items(self, current_folder):
         if current_folder is None or not current_folder.get_uri():
@@ -905,6 +969,9 @@ class ExtencionCopiex(GObject.GObject, Nautilus.MenuProvider):
     # ------------------------------------------------------------------
     def _activar_copiar(self, menu, uris):
         _al_copiar(uris)
+
+    def _activar_cortar(self, menu, uris):
+        _al_cortar(uris)
 
     def _activar_pegar(self, menu, destino):
         _al_pegar(destino)

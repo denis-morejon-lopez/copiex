@@ -117,22 +117,30 @@ class Aplicacion(Adw.Application):
     # ------------------------------------------------------------------
     # copias
     # ------------------------------------------------------------------
-    def crear_copia(self, origenes, destinos, mostrar=True):
+    def crear_copia(self, origenes, destinos, mostrar=True, mover=False):
         """Crea una copia a una o varias carpetas de destino.
 
         Con varios destinos se lee el origen una sola vez y se escribe en todos
-        a la vez. Se llama siempre desde el hilo principal.
+        a la vez. Con `mover=True` (un «Cortar» de Nautilus) los orígenes se
+        borran cuando todos los destinos están completos. Se llama siempre desde
+        el hilo principal.
         """
         if isinstance(destinos, str):
             destinos = [destinos]
         try:
-            op = self.motor.crear(origenes, destinos)
+            op = self.motor.crear(origenes, destinos, mover=mover)
         except ErrorCopia as exc:
             log.warning("No se pudo crear la copia: %s", exc)
             if self.ventana is not None:
                 self.ventana.aviso(str(exc))
             return None
-        log.info("Copia id=%s creada en la cola: %s -> %s", op.id, origenes, destinos)
+        log.info(
+            "%s id=%s creada en la cola: %s -> %s",
+            "Movimiento" if mover else "Copia",
+            op.id,
+            origenes,
+            destinos,
+        )
         if mostrar and self.ventana is None:
             self.do_activate()  # la tarea tiene que verse: se abre la ventana
         if self.ventana is not None:
@@ -217,6 +225,7 @@ class Aplicacion(Adw.Application):
                 origenes = [uri_to_path(u) for u in (mensaje.get("sources") or [])]
                 uris_destino = mensaje.get("dests") or [mensaje.get("dest") or ""]
                 destinos = [uri_to_path(u) for u in uris_destino if u]
+                mover = bool(mensaje.get("move"))
                 if not origenes:
                     raise ValueError("Nautilus no ha indicado ningún origen")
                 if not destinos:
@@ -230,14 +239,14 @@ class Aplicacion(Adw.Application):
             except Exception as exc:  # respuesta de error a la extensión
                 log.warning("IPC copy rechazado: %s", exc)
                 return {"ok": False, "error": str(exc)}
-            GLib.idle_add(self._crear_copia_desde_ipc, origenes, destinos)
+            GLib.idle_add(self._crear_copia_desde_ipc, origenes, destinos, mover)
             return {"ok": True}
         return {"ok": False, "error": f"comando desconocido: {comando}"}
 
-    def _crear_copia_desde_ipc(self, origenes, destinos):
+    def _crear_copia_desde_ipc(self, origenes, destinos, mover=False):
         """Crea la copia pedida por la extensión. Devuelve False porque
         GLib.idle_add repetiría la llamada mientras el callback sea verdadero."""
-        self.crear_copia(origenes, destinos)
+        self.crear_copia(origenes, destinos, mover=mover)
         return False
 
     # ------------------------------------------------------------------

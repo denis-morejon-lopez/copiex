@@ -66,8 +66,9 @@ command -v update-desktop-database >/dev/null 2>&1 \
 sed "s|@EJECUTABLE@|$DIR/copiex-launcher|" "$DIR/com.copiex.Manager.service.in" \
     > "$SERVICIOS/com.copiex.Manager.service"
 
-# 1 ter) iconos: el de la aplicación (escritorio, ventana, «Acerca de») y el
-# simbólico de una tinta que usa la bandeja.
+# 1 ter) iconos: el de la aplicación (escritorio, ventana, «Acerca de» y
+# bandeja) y la variante simbólica de una tinta, que queda disponible por si
+# algún tema la prefiere.
 cp "$DIR/icons/com.copiex.Manager.svg" \
    "$DIR/icons/com.copiex.Manager-symbolic.svg" "$ICONOS/"
 command -v gtk-update-icon-cache >/dev/null 2>&1 \

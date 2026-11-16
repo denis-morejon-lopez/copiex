@@ -1,23 +1,23 @@
 # Copiex — punto de retorno
 
-Estado del trabajo al **14 de noviembre de 2026**, con los dos últimos arreglos ya
-instalados y probados en banco: el destino que pierde su fichero durante una pausa y el
-arranque de Copiex desde Nautilus (envío sin hilos y activación por D-Bus). Este fichero y
-`NOTES.md` son todo lo que necesita una sesión nueva: el asistente no conserva memoria
-entre chats, y este resumen evita tener que releer el historial de la conversación
-anterior.
+Estado del trabajo al **16 de noviembre de 2026**: el 14/11 quedaron instalados el arreglo
+del destino borrado durante una pausa y el arranque de Copiex desde Nautilus (envío sin
+hilos y activación por D-Bus); el 16/11 se añadió el **requerimiento 12 (MTP)**, probado
+con un Android real en ambos sentidos. Este fichero y `NOTES.md` son todo lo que necesita
+una sesión nueva: el asistente no conserva memoria entre chats, y este resumen evita
+tener que releer el historial de la conversación anterior.
 
-**Resumen en una línea:** Copiex está terminado: los 11 requerimientos del pliego y los 4
+**Resumen en una línea:** Copiex está terminado: los 12 requerimientos del pliego y los 4
 errores están resueltos (bandeja, extensión de Nautilus, historial SQLite con reanudación
 automática, `menu.yaml` con todos los textos, «Acerca de», alerta sonora propia con botón
-«Eliminar», icono propio y copia optimizada con `copy_file_range`), y además una copia
-puede repartirse a varios destinos leyendo el origen una sola vez. El 14/11 se corrigieron
-además los dos fallos de la prueba real: un destino cuyo fichero se borra durante la pausa
-no infla el progreso y se reintenta solo; y la extensión ya no envía desde un hilo ni
-lanza Copiex con `fork` desde Nautilus (lo arranca el bus de sesión), así que la petición
-sale en milisegundos. Solo queda una mejora menor: tratar un «cortar» de Nautilus como
-mover. Los requerimientos de workers se retiraron del pliego el 13/11 y su código se
-eliminó (sección 3 quinquies).
+«Eliminar», icono propio, copia optimizada con `copy_file_range`, varios destinos con una
+sola lectura y copia hacia/desde MTP). El 14/11 se corrigieron los dos fallos de la prueba
+real: un destino cuyo fichero se borra durante la pausa no infla el progreso y se
+reintenta solo; y la extensión ya no envía desde un hilo ni lanza Copiex con `fork` desde
+Nautilus (lo arranca el bus de sesión), así que la petición sale en milisegundos. El 16/11
+se añadió además **«Cortar con Copiex»**: mueve de verdad (copia y borra los orígenes al
+terminar), también con «Pegar con Copiex N destinos». Los requerimientos de workers se
+retiraron del pliego el 13/11 y su código se eliminó (sección 3 quinquies).
 
 ---
 
@@ -25,12 +25,13 @@ eliminó (sección 3 quinquies).
 
 Abre el proyecto en Freebuff y pega algo como:
 
-> Lee `TODO.md` y `NOTES.md`. Los 11 requerimientos y los 4 errores del pliego ya están
+> Lee `TODO.md` y `NOTES.md`. Los 12 requerimientos y los 4 errores del pliego ya están
 > cerrados: no rehagas lo ya verificado y, si hay algo nuevo, sigue las reglas de
 > `AGENTS.md` (textos en `menu.yaml`, nombres de fichero en inglés, sin workers, sin
-> `pkill -f`). Antes de tocar el motor o la extensión, lee 3 ter y 3 quindecies: el 14/11
-> se corrigieron el destino borrado durante la pausa y el arranque sin hilos por D-Bus.
-> Lo único pendiente es la prueba real del menú de Nautilus y la sección 4. No hagas
+> `pkill -f`). Antes de tocar el motor o la extensión, lee 3 ter, 3 quindecies y
+> 3 septendecies: el 14/11 se corrigieron el destino borrado durante la pausa y el
+> arranque sin hilos por D-Bus, y el 16/11 se añadieron MTP y «Cortar con Copiex». No
+> queda trabajo pendiente salvo tu prueba real del menú de Nautilus (sección 4). No hagas
 > commit ni push sin pedírmelo.
 
 La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hechas.
@@ -60,6 +61,8 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
 | Copia a varios destinos | **Hecho el 13/11.** Una operación, varias carpetas destino y **una sola lectura** del origen: cada bloque se escribe en todos los destinos a la vez. Cada destino tiene su cola visible en la ventana, su progreso en la BD, y se reanuda solo si su carpeta desaparece. En Nautilus: «Pegar con Copiex N destinos». Detalles en 3 quindecies. |
 | Destino borrado o truncado durante la pausa | **Corregido el 14/11.** Antes se seguía escribiendo en el inodo ya borrado: el progreso mentía y la operación quedaba en `running`. Ahora se comprueba el fichero antes de cada bloque, el progreso baja a lo que queda en disco (0 si se borró) y el destino se reintenta al terminar el resto; los botones pasan a «Eliminar» solo con todo completo. Detalles y pruebas en 3 quindecies. |
 | Arranque desde Nautilus sin hilos | **Hecho el 14/11.** La extensión ya no envía desde un `threading.Thread` (se quedaba esperando el GIL) ni lanza Copiex con `subprocess.Popen` (fork desde Nautilus): `_Envio` usa callbacks de `GLib.io_add_watch` y el arranque lo hace el bus de sesión. Medido: 0,404 s en frío y 0,003 s con la app abierta. Detalles en 3 ter. |
+| MTP (requerimiento 12) | **Hecho y probado el 16/11.** Las URIs `mtp://` se resuelven con GIO a su montaje de gvfs-fuse y el motor trabaja con rutas normales; funciona en ambos sentidos, con varios destinos y una sola lectura, con pausa, cancelación y reanudación. Al escribir en MTP el fichero se rehace desde cero (MTP no admite continuación fiable). Detalles en 3 septendecies. |
+| «Cortar con Copiex» (mover) | **Hecho y probado el 16/11.** Nueva entrada en el menú de Nautilus, también para «Pegar con Copiex N destinos»: copia primero y borra los orígenes cuando **todos** los destinos están completos; con cancelación, error o destino ausente los originales no se tocan. La marca `mover` se guarda en el historial y el portapapeles con cabecera `cut` también se mueve. Detalles en 3 octodecies. |
 
 Lo único **no** comprobado visualmente es lo que exige un clic o mirar el panel: el menú
 desplegado de Nautilus (Wayland sin `xdotool`/`ydotool`) y el aspecto del icono en el
@@ -70,23 +73,23 @@ N destinos» ni su ventana de selección: se comprobó que el menú devuelve la 
 sus textos y que la ventana se construye y se cierra. Tampoco se ha repetido la prueba
 real de arranque con la app cerrada desde el menú; sí en banco, por D-Bus (0,404 s).
 
-## 2 bis. Mapa del código (4 416 líneas al 14/11, con scripts y plantillas)
+## 2 bis. Mapa del código (4 645 líneas al 16/11, con scripts y plantillas)
 
 | Fichero | Líneas | Responsabilidad |
 |---|---|---|
-| `copiex/util.py` | 126 | Rutas (`runtime_dir`, `socket_path`, `data_dir`), URIs ↔ rutas, formatos de tamaño y tiempo, `APP_ID`/`APP_NAME`/`EXTENSION_NAME`. |
+| `copiex/util.py` | 172 | Rutas (`runtime_dir`, `socket_path`, `data_dir`), URIs ↔ rutas (`uri_to_path` acepta `file:` y `mtp:`, `es_mtp`, `ruta_a_uri`, `short_path` muestra `mtp://…`), formatos de tamaño y tiempo, `APP_ID`/`APP_NAME`/`EXTENSION_NAME`. |
 | `copiex/logs.py` | 203 | Registro único `copiex.log` en DEBUG con 7 días de retención: poda atómica por fecha y por tamaño (`podar`, `ManejadorSemanal`, `configurar_registro`). |
-| `copiex/engine.py` | 1100 | `Operacion` (hilo de copia, pausa, aviso, velocidad, persistencia), `DestinoCopia` (estado por destino) y `Motor` (crear, pausar, reanudar, cancelar, historial). Bloques de 1 MiB; un solo destino con `os.copy_file_range` (reserva a lectura/escritura) y varios con `_copiar_a_varios()` (una lectura, escritura a todos); un `stat` por fichero y carpetas memorizadas; `_copiar_fichero()` reanuda por byte; `_pares()` calcula origen→destino. `_intacto()`/`_destino_cambio()` detectan un destino borrado o truncado; `_ejecutar_plan()` y hasta 3 pasadas en `_trabajar_seguro()` reintentan esos destinos; el `finally` de `_trabajar` no deja ninguno en `running`. |
-| `copiex/store.py` | 232 | SQLite en `~/.local/share/copiex/historial.db`: alta, actualización, pendientes, migración de `pausa_manual` y tabla `destinos` (`crear` acepta lista, `actualizar_destino`, `destinos_de`). |
+| `copiex/engine.py` | 1183 | `Operacion` (hilo de copia, pausa, aviso, velocidad, persistencia), `DestinoCopia` (estado por destino) y `Motor` (crear, pausar, reanudar, cancelar, historial). Bloques de 1 MiB; un solo destino con `os.copy_file_range` (reserva a lectura/escritura) y varios con `_copiar_a_varios()` (una lectura, escritura a todos); un `stat` por fichero y carpetas memorizadas; `_copiar_fichero()` reanuda por byte; `_pares()` calcula origen→destino. `_intacto()`/`_destino_cambio()` detectan un destino borrado o truncado; `_ejecutar_plan()` y hasta 3 pasadas en `_trabajar_seguro()` reintentan esos destinos; el `finally` de `_trabajar` no deja ninguno en `running`. Con MTP (`es_mtp`) no usa `copy_file_range` y rehace el fichero en vez de continuarlo por byte, descontando del progreso el parcial anterior. `Operacion.mover` (un «cortar») borra los orígenes en `_borrar_origenes()` solo con todos los destinos en `done`; la marca se persiste en la columna `mover`. |
+| `copiex/store.py` | 248 | SQLite en `~/.local/share/copiex/historial.db`: alta, actualización, pendientes, migración de `pausa_manual` y tabla `destinos` (`crear` acepta lista, `actualizar_destino`, `destinos_de`). |
 | `copiex/watcher.py` | 75 | Hilo cada 6 s que reanuda `paused`/`error` cuando origen y **todas** las carpetas destino están disponibles; respeta `pausa_manual`. |
-| `copiex/menu.py` | 176 | Textos de la interfaz: lector YAML mínimo de `menu.yaml`, con caché y textos por defecto; `texto("menu.nueva")`. |
+| `copiex/menu.py` | 181 | Textos de la interfaz: lector YAML mínimo de `menu.yaml`, con caché y textos por defecto; `texto("menu.nueva")`. |
 | `copiex/sound.py` | 105 | Alerta de fin de copia: reproduce el audio de `sounds/` (o el del sistema) con `canberra-gtk-play`, `paplay` o `gst-launch-1.0`, en segundo plano. |
 | `sounds/` | — | `copy-finished.wav` (alarma por defecto, sustituible) y `README.md` con las reglas de elección del fichero. |
-| `copiex/app.py` | 331 | `Adw.Application`: une motor, ventana, bandeja e IPC; acciones `nueva`/`ocultar`/`acerca`/`salir`; sonido una vez por copia terminada; argumento `--bandeja`; IPC con `dest` o `dests`. |
+| `copiex/app.py` | 340 | `Adw.Application`: une motor, ventana, bandeja e IPC; acciones `nueva`/`ocultar`/`acerca`/`salir`; sonido una vez por copia terminada; argumento `--bandeja`; IPC con `dest` o `dests`. |
 | `copiex/window.py` | 314 | Ventana del historial: fila por copia con barra, velocidad, estado, «Reintentar»/«Cancelar»/«Eliminar» y, si hay varios destinos, una línea de cola por destino; menú (ocultar/acerca/salir) y botón «Nueva copia». |
-| `copiex/tray.py` | 331 | Icono de bandeja por StatusNotifierItem + D-Bus, sin dependencias; menú contextual. |
+| `copiex/tray.py` | 334 | Icono de bandeja por StatusNotifierItem + D-Bus, sin dependencias; menú contextual. |
 | `copiex/ipc.py` | 126 | Socket Unix `$XDG_RUNTIME_DIR/copiex-<uid>/copiex.sock`; JSON por línea (`ping`, `show`, `copy`); cada conexión se atiende en un hilo propio (`listen(32)`) para que una colgada no retrase la siguiente. |
-| `copiex/nautilus_extension.py` | 913 | Extensión de Nautilus: menú contextual (etiquetas de `menu.yaml`), portapapeles, envío por socket y ciclo «Pegar con Copiex N destinos» (`_SelectorDestinos`). `_Envio` hace connect/send/recv no bloqueantes con `GLib.io_add_watch` (sin hilos); `_arrancar_app()` usa el servicio D-Bus y deja `_arrancar_app_directo()` como respaldo. |
+| `copiex/nautilus_extension.py` | 980 | Extensión de Nautilus: menú contextual (etiquetas de `menu.yaml`), «Copiar» y «Cortar» (portapapeles con cabecera `copy`/`cut`, acepta `file://` y `mtp://`), envío por socket (`move: true` para cortar) y ciclo «Pegar con Copiex N destinos» (`_SelectorDestinos`, que muestra la URI MTP sin `%20`). `_Envio` hace connect/send/recv no bloqueantes con `GLib.io_add_watch` (sin hilos); `_arrancar_app()` usa el servicio D-Bus y deja `_arrancar_app_directo()` como respaldo. |
 | `icons/` | — | Icono propio: `com.copiex.Manager.svg` (color) y `com.copiex.Manager-symbolic.svg` (una tinta, para la bandeja). |
 | `brand/` | — | Propuestas de logo descartadas y `preview.html`, la galería con la que se eligió el icono. |
 | `menu.yaml` | 50 | Nombres de las opciones de menú y textos de las ventanas emergentes, incluida la descripción de «Acerca de» y los de la selección de varios destinos. |
@@ -99,7 +102,8 @@ desde Nautilus, la extensión instalada en
 ## 2 ter. Requerimientos del pliego, uno a uno
 
 El pliego se renumeró el 13/11: al retirar los antiguos 9–11 (workers), «alerta sonora»,
-«Acerca de» y `menu.yaml` pasaron a ser los requerimientos 9, 10 y 11.
+«Acerca de» y `menu.yaml` pasaron a ser los requerimientos 9, 10 y 11. El 16/11 se añadió
+el 12 (MTP).
 
 | # | Requerimiento | Estado |
 |---|---|---|
@@ -114,6 +118,7 @@ El pliego se renumeró el 13/11: al retirar los antiguos 9–11 (workers), «ale
 | 9 | Alerta sonora y botón «Eliminar» al terminar | Hecho: `copiex/sound.py` una vez por copia y «Eliminar» en lugar de «Cancelar» (sección 3 undecies). |
 | 10 | «Acerca de» con descripción corta y versión, en `menu.yaml` | Hecho: `app.acerca` con `Adw.AboutDialog` (versión 1.0.0 y descripción del YAML); sección 3 decies. |
 | 11 | `menu.yaml` con nombres de opciones y textos de ventanas | Hecho: menús de ventana, bandeja y Nautilus más diálogos leen `menu.yaml`; sección 3 decies. |
+| 12 | Copiar hacia o desde dispositivos `mtp://` | Hecho y probado el 16/11 con un Android real: ambos sentidos, varios destinos, pausa, cancelación y reanudación; sección 3 septendecies. |
 | E1 | No detecta copias de Nautilus estando activo | Corregido y verificado. |
 | E2 | Error de E/S sin reanudar ni botón de cancelar | Corregido: vigilante + botones «Reintentar»/«Cancelar». |
 | E3 | Varios ficheros se copian muy lentos | Medido y mejorado: −20 % de tiempo y −22 % de CPU en 2 000 ficheros pequeños, −14 % en un fichero de 256 MiB (`copy_file_range`, un `stat` por fichero, carpetas memorizadas); sección 3 duodecies. |
@@ -156,8 +161,9 @@ file:///home/ana/b.txt
 - Al pegar manda el portapapeles; la selección de «Copiar con Copiex» es solo el respaldo.
 - En Wayland el portapapeles solo se puede leer desde un proceso con foco: por eso la
   lectura vive en la extensión (dentro de Nautilus) y no en la aplicación.
-- **Cortar (`cut`) se trata como copiar**: el motor no mueve ficheros. Queda como mejora
-  menor opcional.
+- **Cortar (`cut`) mueve**: desde el 16/11 la cabecera `cut` (de Nautilus o de «Cortar con
+  Copiex») hace que, tras copiar a todos los destinos, se borren los orígenes. Detalles en
+  3 octodecies.
 - **Interceptar el Ctrl+V propio de Nautilus no es posible** con python3-nautilus: la API
   no expone ningún hook del pegado del gestor. La vía soportada es «Pegar con Copiex».
 
@@ -501,15 +507,17 @@ turquesa con una barra de progreso debajo. Quedó instalado así:
 
 - `icons/com.copiex.Manager.svg`: icono de color, con el mismo nombre que el `application_id`
   para que lo encuentre el escritorio, el dock y «Acerca de» (`application_icon`).
-- `icons/com.copiex.Manager-symbolic.svg`: versión de una tinta (16×16) para la bandeja.
-  `Bandeja._elegir_icono()` lo usa solo si el tema lo tiene (tras `./install.sh`); si no,
-  cae en `edit-copy` y el icono nunca desaparece.
+- `icons/com.copiex.Manager-symbolic.svg`: versión de una tinta (16×16). Se instala,
+  pero **la bandeja ya no la usa**: el 16/11 se cambió a la variante a color porque la
+  simbólica se veía como un punto con una barrita. `Bandeja.ICONO` apunta a
+  `com.copiex.Manager`; si el tema no lo tiene, cae en `edit-copy` y nunca queda un hueco.
 - `install.sh` los copia a `~/.local/share/icons/hicolor/scalable/apps`, refresca
   `gtk-update-icon-cache` y la entrada de escritorio pasa a `Icon=com.copiex.Manager`.
   `uninstall.sh` los borra y refresca la caché (comprobado con `--simular`).
 - La ventana fija `set_icon_name("com.copiex.Manager")`, muestra el icono (22 px) dentro de
   la cabecera **justo después del título «Copiex»** (un `Gtk.Image` añadido al
-  `Adw.WindowTitle` dentro de un `Gtk.Box`) y «Acerca de» usa el mismo nombre.
+  `Adw.WindowTitle` dentro de un `Gtk.Box`), «Acerca de» usa el mismo nombre y la bandeja
+  también (antes usaba la variante simbólica).
 - `util.icono_disponible()` centraliza la elección con reserva a `edit-copy`; lo usan la
   cabecera, la bandeja y «Acerca de».
 
@@ -643,9 +651,111 @@ Copiex (3 ter y 3 quindecies). Si reaparece, anotar la hora y ejecutar
 Tracker tiene 214 MB y el proveedor de búsqueda de Notes reindexa notas al arrancar, el
 sospechoso si solo pasa la primera vez tras iniciar sesión.
 
+## 3 octodecies. «Cortar con Copiex»: mover de verdad (16/11)
+
+El pendiente menor del pliego ya está hecho: el menú contextual de Nautilus ofrece
+**«Copiar con Copiex»** y **«Cortar con Copiex»**. Cortar no cambia el motor de copia:
+copia igual que siempre y, **solo cuando todos los destinos están en `done`**, borra los
+orígenes. Así vale para «Pegar con Copiex» y para «Pegar con Copiex N destinos» sin
+duplicar lógica.
+
+- **Extensión.** `_al_cortar()` marca la selección con la cabecera `cut` del portapapeles
+  de Nautilus (`x-special/gnome-copied-files`), así que un Ctrl+V normal del gestor
+  también movería. Al pegar, `_con_origenes()` lee la acción (`_accion_del_portapapeles`) y
+  añade `"move": true` al mensaje; si el portapapeles no contesta o el formato no trae
+  cabecera pero son los mismos elementos, usa la última marca (`_seleccion_accion`). «N destinos» guarda el modo en `_SelectorDestinos` y lo manda al
+  finalizar. Un Ctrl+X de Nautilus también se interpreta como mover.
+- **Aplicación.** `crear_copia(..., mover=True)` → `Motor.crear(..., mover=True)`;
+  `Operacion.mover` viaja a la columna nueva `mover` de `copias` (migración automática), y
+  `cargar_historial()` la recupera: si la app se cierra a mitad, al reanudar sigue siendo
+  un movimiento.
+- **Borrado.** `_borrar_origenes()` se ejecuta al final de `_trabajar_seguro`, después de
+  `_recalcular()` y solo con `estado == "done"` y sin cancelación. Borra ficheros y
+  carpetas de dentro hacia fuera (`_borrar_arbol`) y es mejor esfuerzo: si un origen no se
+  puede borrar, la copia sigue `done` y queda un aviso en el registro. Nunca borra nada
+  antes de tener los datos en **todos** los destinos.
+- **Misma carpeta.** `Motor.crear()` rechaza que el destino sea la carpeta del propio
+  origen («El destino es la misma carpeta que el origen»); antes se habría escrito sobre
+  el origen y un cortar lo habría perdido.
+- **Textos.** `nautilus.cortar` y `nautilus.cortar_ayuda` en `menu.yaml` (y en
+  `_TEXTO_DEFECTO` de la extensión / `_POR_DEFECTO` de `menu.py`).
+
+**Comprobado el 16/11** con base de datos y carpetas temporales en `/tmp`:
+
+- Mover un fichero de 4 MiB: `done`, hash idéntico, origen borrado y `mover = 1` en la BD.
+- Mover una carpeta con subcarpeta: se copia el árbol, hashes correctos y desaparece la
+  carpeta origen.
+- Mover 8 MiB a **dos destinos**: los dos hashes correctos y el origen se borra una sola
+  vez al final.
+- Destino ausente (simulado con un fichero en su ruta): la copia queda en pausa y el
+  origen sigue; cancelar tampoco lo borra.
+- Cancelar a mitad de 200 MB: origen intacto y sin parcial en el destino.
+- La marca `mover` se recupera con `cargar_historial()` tras reabrir el historial.
+- Pegar en la misma carpeta se rechaza sin tocar el origen.
+- Si el destino ya tenía el fichero completo, el movimiento lo da por bueno y borra el
+  origen.
+- IPC real (`"move": true`) con app aislada: un origen a 1 destino y otro a 2 destinos,
+  ambos `done`, hashes correctos y los dos orígenes borrados.
+- Extensión: el portapapeles distingue `cut`/`copy`, «Cortar con Copiex» recuerda la
+  acción, tanto el pegado simple como el de N destinos envían `move`, y el menú devuelve
+  las etiquetas «Copiar con Copiex» y «Cortar con Copiex».
+- Migración sobre una copia del historial real: la columna `mover` se añade y las 36 filas
+  se conservan.
+
+No probado: mover desde/hacia MTP (no había móvil conectado al terminar) ni el clic real
+en el menú de Nautilus (Wayland). Limitación heredada: una carpeta **vacía** sigue dando
+«No hay nada que copiar», también al cortar.
+
+## 3 septendecies. MTP: copiar hacia o desde el móvil (requerimiento 12, 16/11)
+
+**Cómo se resolvió.** GIO ya monta los dispositivos MTP con `gvfsd-mtp` y, si está
+`gvfs-fuse`, les da una ruta local. `util.uri_to_path()` acepta ahora `mtp://` y usa
+`Gio.File.new_for_uri(uri).get_path()`; el resto del programa (motor, historial, ventana,
+vigilante) sigue trabajando con rutas, sin reescribir el motor para GIO.
+
+- **Ambos sentidos.** Origen MTP → destino local y origen local → destino MTP, también
+  con MTP como uno de varios destinos (una sola lectura). La extensión de Nautilus acepta
+  `mtp://` en el portapapeles y en la carpeta de destino; los diálogos de «Nueva copia»
+  también ven los montajes MTP del selector de GTK.
+- **Sin continuación por byte en MTP.** MTP no admite escritura aleatoria fiable, así que
+  si hay un extremo MTP el fichero se rehace desde cero: se descuenta del progreso el
+  parcial que hubiera (la barra no engaña) y se escribe con `wb`. Tampoco se usa
+  `copy_file_range`; va por bloques de 1 MiB (lectura/escritura).
+- **Rutas y textos.** La base de datos guarda la ruta de gvfs-fuse; `util.short_path()`
+  la muestra como `mtp://Android_…/Almacenamiento interno compartido/…` (sin `%20`) en la
+  ventana y en el vigilante. `es_mtp()` detecta esos montajes por `/gvfs/mtp:host=`.
+- **Desconexión.** Si se va el teléfono, la ruta deja de existir: el destino queda en
+  pausa «esperando la carpeta…» y el vigilante lo reanuda al volver, igual que un USB.
+- **Requisito del sistema:** `gvfs-fuse` (paquete del mismo nombre, presente en Ubuntu).
+  Sin él, `get_path()` devuelve `None` y el IPC responde con un error que lo explica.
+
+**Comprobado el 16/11** con un Android conectado (`mtp://Android_Android_3a3f845/`),
+base de datos y carpetas temporales en `/tmp`, en la carpeta `Copiex-prueba` del almacén
+interno (creada para la prueba y borrada después):
+
+- 4 MiB local → MTP: `done` en 0,9 s, tamaño correcto y SHA-256 idéntico; 4 MiB MTP →
+  local: `done` en 0,5 s y hash idéntico.
+- 5 MiB a dos destinos (local + MTP): `done`, los dos hashes correctos y `rchar` de
+  5 242 985 bytes para 5 242 880 (una sola lectura).
+- Pausa a 3 MiB escribiendo en MTP y reanudación: `done`, hash correcto.
+- Cancelar a 1 MiB escribiendo en MTP: no queda el parcial.
+- Origen MTP con un destino local parcial de 1 KiB: se rehace desde cero y el hash es
+  correcto.
+- Carpeta con subcarpeta (`carpeta/uno.bin` y `carpeta/sub/dos.bin`) en ambos sentidos:
+  `done`, se crean las carpetas en MTP y los cuatro hashes coinciden.
+- IPC completo (`copy` con `sources` MTP y destino `file://`): `{'ok': True}`, operación
+  `done` y hash idéntico; el portapapeles de la extensión devuelve juntas las URIs
+  `file://` y `mtp://`.
+
+No probado con el cable desconectado físicamente (el vigilante usa la misma comprobación
+que con un USB), con varios destinos MTP a la vez ni con el clic real en el menú de
+Nautilus sobre una carpeta del teléfono; eso queda para la prueba del usuario.
+
 ## 4. Pendientes, por orden sugerido
 
-1. *(menor)* Tratar el pegado de un «cortar» (`cut`) como mover, no como copiar.
+No hay trabajo pendiente del pliego. Queda la prueba real del usuario con el menú de
+Nautilus (cortar a uno y a varios destinos) y, si se quiere afinar, mover carpetas vacías
+y mover hacia/desde MTP.
 
 ## 5. Trampas del entorno (ahorran media hora cada una)
 
@@ -693,6 +803,12 @@ sospechoso si solo pasa la primera vez tras iniciar sesión.
   tabla `destinos`, no en `copias`.
 - **Protocolo IPC:** `{"cmd":"copy","sources":[uri,...],"dest":uri}` o, para varios
   destinos, `"dests":[uri,...]` (`dest` se sigue aceptando); además de `ping` y `show`.
+  Las URIs pueden ser `file://` o `mtp://`.
+- **MTP:** depende de `gvfs-fuse`; comprobar con `ls /run/user/1000/gvfs` y
+  `gio mount -l`. La ruta `/run/user/<uid>/gvfs/mtp:host=…` es la que usa el motor, pero
+  en la interfaz se muestra como `mtp://…`. No intentes reanudar por byte un fichero en
+  MTP: el motor lo rehace a propósito. Si el móvil se desconecta, la carpeta desaparece y
+  la copia queda en pausa esperando, como un USB.
 - **Probar sin clic derecho:** importar `copiex.nautilus_extension`, instanciar
   `ExtencionCopiex()` y emitir `activate` sobre los ítems de `get_file_items()` /
   `get_background_items()`. Es exactamente lo que hace Nautilus.
@@ -710,16 +826,18 @@ sospechoso si solo pasa la primera vez tras iniciar sesión.
 ## 6. Estado del sistema donde se probó
 
 Ubuntu 26.04 «resolute», GNOME 50.1, Nautilus 50.2.2, GTK 4.22.4, PyGObject 3.56.2,
-Wayland. El proyecto **es un repositorio git** (rama `main`; último commit `c78d28e`
-«Ajustes generales»; remoto `repo-copiex` en GitHub). **Todo el trabajo del 13 y 14/11
-está sin commitear**: motor de varios destinos y sus arreglos (`engine`), `store`,
+Wayland. El 16/11 había un Android montado por MTP (`gvfsd-mtp` y `gvfs-fuse` 1.60). El
+proyecto **es un repositorio git** (rama `main`; último commit `c78d28e` «Ajustes
+generales»; remoto `repo-copiex` en GitHub). **Todo el trabajo del 13, 14 y 16/11 está sin
+commitear**: motor de varios destinos y sus arreglos, MTP (`util`, `engine`), `store`,
 `window`, `app`, `ipc`, `menu`, extensión reescrita sin hilos, `install.sh`,
 `uninstall.sh`, `com.copiex.Manager.service.in` (nuevo), `menu.yaml`, `TODO.md`,
 `AGENTS.md` y varios `.pyc` de `copiex/__pycache__/` que no conviene commitear.
-Historial real al cerrar la sesión: 35 filas (27 `done`, 4 `error`, 4 `cancelled`) y 9
-filas en `destinos`. La app quedó en marcha (el PID cambia; comprobar con
-`ps -eo pid,args | grep "[p]ython3 -m copiex"`). **Aviso de seguridad:** la URL del remoto guarda
-un token de GitHub incrustado en `.git/config`; conviene rotarlo y usar un ayudante de
+Historial real al cerrar la sesión: 36 filas y 9 filas en `destinos`. La app quedó en
+marcha (el PID cambia; comprobar con `ps -eo pid,args | grep "[p]ython3 -m copiex"`),
+reiniciada el 16/11 para estrenar MTP y «Cortar con Copiex», y Nautilus recargado
+(`nautilus -q`) con la extensión idéntica a la fuente. **Aviso de seguridad:** la URL del remoto guarda un
+token de GitHub incrustado en `.git/config`; conviene rotarlo y usar un ayudante de
 credenciales. No hagas commit ni push sin que el usuario lo pida.
 
 ## 7. Recetas de verificación (las que ya se usaron)
@@ -759,5 +877,15 @@ op = m.crear(["/tmp/prueba/origen.bin"], "/tmp/prueba/destino")
   usar `_Envio({"cmd": "ping"})` dentro de un `GLib.MainLoop` con el entorno real; debe
   responder en ~0,4 s y dejar rastro en `copiex.log`. Con la app abierta, ~0,003 s.
   (Con `XDG_DATA_HOME` temporal, el bus no encuentra el servicio; ver sección 5.)
+- **Cortar (mover):** `Motor.crear(origenes, destinos, mover=True)` copia y borra los
+  orígenes al terminar; comprobar que el destino tiene el SHA-256 correcto, que el origen
+  ya no existe y que `store.obtener(op.id)["mover"] == 1`. Con dos destinos, el origen
+  debe desaparecer solo cuando ambos estén `done`. Cancelar o simular un destino ausente
+  debe dejar el origen intacto. Por IPC: `{"cmd":"copy","sources":[…],"dests":[…],"move":true}`.
+- **MTP:** `uri_to_path("mtp://…")` da la ruta de gvfs-fuse; con un Android conectado,
+  crear una carpeta temporal en `Almacenamiento interno compartido` (o similar), copiar
+  en ambos sentidos con `Motor.crear`, comprobar SHA-256 y borrarla al terminar. MTP no
+  continúa parciales: pausar y reanudar debe rehacer el fichero y acabar con el hash
+  correcto. Para el IPC, `{"sources": ["mtp://…"], "dests": ["file:///tmp/…"]}`.
 - **Regla de oro:** cualquier callback pasado a `GLib.idle_add` debe devolver `False`
   (ver sección 3).

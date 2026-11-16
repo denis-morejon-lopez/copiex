@@ -14,7 +14,7 @@ import traceback
 import gi
 
 from .menu import texto
-from .util import ICONO_BANDEJA, icono_disponible
+from .util import ICONO_APP, icono_disponible
 
 from gi.repository import Gio, GLib
 
@@ -118,7 +118,10 @@ SALIR_ID = 2
 class Bandeja:
     """Icono de bandeja con menú contextual: ocultar ventana / salir."""
 
-    ICONO = ICONO_BANDEJA
+    # La bandeja usa el icono a color (la «C» blanca sobre verde). La variante
+    # simbólica de una tinta se veía como un punto con una barra y no es la que
+    # quiere el usuario.
+    ICONO = ICONO_APP
 
     def __init__(self, al_pulsar, al_ocultar, al_salir, titulo="Copiex"):
         self._al_pulsar = al_pulsar  # clic izquierdo: mostrar/ocultar

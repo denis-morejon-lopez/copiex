@@ -28,6 +28,7 @@ las condiciones lo propicien. Estas condiciones son:
 esa descripción debe existir en un fichero texto nombrado menu.yaml
 11- El fichero nombrado menu.yaml contendrá los nombres de las opciones de  menu. Y si una opción de menu deriva en una ventana emergente, el texto de esa ventana debe estar
 reflejado en ese fichero menu.yaml
+12- Necesitamos que copiex también pueda copiar hacia o desde dispositivos mtp://
 
 ### Errores detectados
 1- Copiex no detecta la copia que se intenta hacer a través de Nautilus cuando ya está activo en la ventana superior derecha.

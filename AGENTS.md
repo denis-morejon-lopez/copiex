@@ -9,15 +9,14 @@ nombres en inglés** (`sound.py`, `watcher.py`, `nautilus_extension.py`, `copiex
 (`Vigilante`, `cargar()`, `texto()`).
 
 **Antes de tocar nada, lee `TODO.md`** (estado real, requerimiento por requerimiento,
-trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 11 requerimientos y 4 errores;
-los de workers se retiraron el 13/11).
+trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 12 requerimientos y 4 errores;
+los de workers se retiraron el 13/11 y el 12, MTP, se añadió el 16/11).
 
 ## Trabajo pendiente
 
-Los 11 requerimientos del pliego están hechos y el error 3 (muchos ficheros) está medido y
-mejorado. Queda una mejora menor:
-
-1. Tratar un «cortar» de Nautilus como mover, no como copiar.
+Los 12 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11), el error 3
+(muchos ficheros) está medido y mejorado, y «Cortar con Copiex» mueve de verdad desde el
+16/11. No hay trabajo pendiente.
 
 ## Reglas que no se negocian
 
@@ -88,14 +87,21 @@ Lanzar la GUI desde un terminal sin bloquear:
   YAML propio con caché y reserva). Cambiar el YAML exige reiniciar la app.
 - `sounds/`: audio de la alarma (`copy-finished.*` manda) y `README.md` con las reglas;
   `copiex/sound.py` lo reproduce. Cambiar el sonido no exige reiniciar.
-- `icons/`: icono propio y variante simbólica. `brand/`: propuestas descartadas y la
-  galería `preview.html` con la que se eligió.
+- `icons/`: icono propio a color (la «C» blanca sobre verde, que es el que usa también
+  la bandeja) y variante simbólica. `brand/`: propuestas descartadas y la galería
+  `preview.html` con la que se eligió.
 - `copiex/window.py`: además del historial, la cabecera lleva el icono a 22 px justo
   después del título «Copiex» (`Gtk.Box` con `Adw.WindowTitle` + `Gtk.Image`).
 - `copiex/util.py`: rutas y `icono_disponible()` (icono propio o `edit-copy`).
+  `uri_to_path()` acepta `file://` y `mtp://` (este último se resuelve con GIO a la ruta
+  de gvfs-fuse); `es_mtp()` y `short_path()` muestran `mtp://…` en la interfaz.
 - `copiex/engine.py`: motor de copia (`Operacion`, `Motor`, `DestinoCopia`), bloques de
   1 MiB con `os.copy_file_range` (reserva a lectura/escritura si el sistema de ficheros no
-  lo admite), continuación por byte y reparto a varios destinos con una sola lectura.
+  lo admite), continuación por byte y reparto a varios destinos con una sola lectura. Con
+  MTP no continúa por byte ni usa `copy_file_range`: rehace el fichero desde cero y
+  descuenta el parcial del progreso. Requiere `gvfs-fuse` (paquete del sistema).
+  `Operacion.mover` (un «Cortar») borra los orígenes en `_borrar_origenes()` solo cuando
+  todos los destinos están `done`; la marca se guarda en la columna `mover`.
 - `copiex/store.py`: historial SQLite, incluida la tabla `destinos` con la cola de cada
   carpeta destino. `copiex/watcher.py`: reanudación automática cada 6 s.
 - `copiex/app.py` + `copiex/window.py`: aplicación y ventana del historial.
@@ -104,8 +110,10 @@ Lanzar la GUI desde un terminal sin bloquear:
   sustituye ese fichero, no el código. «Eliminar» solo oculta la fila, nunca borra el
   historial.
 - `copiex/tray.py`: icono de bandeja (StatusNotifierItem). `copiex/ipc.py`: socket Unix.
-- `copiex/nautilus_extension.py`: extensión de Nautilus (menú, portapapeles, arranque y
-  el ciclo de «Pegar con Copiex N destinos», clase `_SelectorDestinos`). Las peticiones
-  se envían **sin hilos** (`_Envio`, callbacks de `GLib.io_add_watch`) y el arranque se
-  pide por D-Bus al servicio `com.copiex.Manager`, que instala `install.sh`
+- `copiex/nautilus_extension.py`: extensión de Nautilus (menú con «Copiar» y «Cortar»,
+  portapapeles con cabecera `copy`/`cut`, arranque y el ciclo de «Pegar con Copiex N
+  destinos», clase `_SelectorDestinos`). Cortar añade `"move": true` al mensaje; el
+  borrado de orígenes lo hace el motor al terminar. Las peticiones se envían **sin hilos**
+  (`_Envio`, callbacks de `GLib.io_add_watch`) y el arranque se pide por D-Bus al servicio
+  `com.copiex.Manager`, que instala `install.sh`
   (`~/.local/share/dbus-1/services/com.copiex.Manager.service`).

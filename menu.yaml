@@ -38,9 +38,11 @@ dialogos:
 
 nautilus:
   copiar: Copiar con Copiex
+  cortar: Cortar con Copiex
   pegar: Pegar con Copiex
   pegar_varios: Pegar con Copiex N destinos
   copiar_ayuda: Marca estos elementos para copiarlos con Copiex
+  cortar_ayuda: Mueve estos elementos con Copiex; los originales se borran cuando termina la copia
   pegar_ayuda: Copia aquí lo marcado con Copiex (o el portapapeles) con progreso, pausa y reanudación
   pegar_varios_ayuda: Copia a esta carpeta y a otras que elijas, leyendo el origen una sola vez
   destinos_titulo: Destinos de la copia

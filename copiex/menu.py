@@ -56,9 +56,14 @@ _POR_DEFECTO = {
     },
     "nautilus": {
         "copiar": "Copiar con Copiex",
+        "cortar": "Cortar con Copiex",
         "pegar": "Pegar con Copiex",
         "pegar_varios": "Pegar con Copiex N destinos",
         "copiar_ayuda": "Marca estos elementos para copiarlos con Copiex",
+        "cortar_ayuda": (
+            "Mueve estos elementos con Copiex: se copian y, al terminar, se "
+            "borran los originales"
+        ),
         "pegar_ayuda": (
             "Copia aquí lo marcado con Copiex (o el portapapeles) con "
             "progreso, pausa y reanudación"

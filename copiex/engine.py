@@ -14,6 +14,8 @@ import threading
 import time
 import traceback
 
+from .util import es_mtp
+
 BLOQUE = 1024 * 1024  # 1 MiB
 INTERVALO_AVISO = 0.12
 MOTIVO_CAMBIO = "el fichero de destino cambió durante la copia"
@@ -63,7 +65,7 @@ class DestinoCopia:
 class Operacion:
     """Una copia en curso o ya finalizada."""
 
-    def __init__(self, op_id, origenes, destinos, store):
+    def __init__(self, op_id, origenes, destinos, store, mover=False):
         if isinstance(destinos, str):
             destinos = [destinos]
         self.id = op_id
@@ -72,6 +74,10 @@ class Operacion:
             DestinoCopia(ruta, orden) for orden, ruta in enumerate(destinos)
         ]
         self._store = store
+        # «Cortar» se guarda en el historial: si la app se cierra a medias, al
+        # reanudar la copia sigue siendo un movimiento y se borran los orígenes
+        # solo cuando esté todo copiado.
+        self.mover = bool(mover)
 
         self.total_bytes = 0
         self.copiados = 0
@@ -537,6 +543,58 @@ class Operacion:
             self._recalcular()
             if self.estado == "error" and not self.error:
                 self.error = "No se pudo copiar a todos los destinos"
+            # «Cortar» termina cuando los datos están en todos los destinos: los
+            # orígenes se borran aquí, nunca antes ni si algo quedó a medias.
+            if self.estado == "done":
+                self._borrar_origenes()
+
+    def _borrar_origenes(self):
+        """Borra los orígenes de un «Cortar» ya copiado a todos los destinos.
+
+        Es el último paso del movimiento. Mejor esfuerzo: si un origen no se
+        puede borrar (permisos, dispositivo desconectado), la copia sigue siendo
+        correcta y queda anotado en el registro; no se pierde nada de lo copiado.
+        """
+        if not self.mover or self._cancelado.is_set():
+            return
+        borrados = 0
+        for origen in self.origenes:
+            origen = os.path.abspath(origen)
+            try:
+                if os.path.isdir(origen) and not os.path.islink(origen):
+                    self._borrar_arbol(origen)
+                elif os.path.lexists(origen):
+                    os.unlink(origen)
+                borrados += 1
+            except OSError as exc:
+                log.warning(
+                    "copia %s: no se pudo borrar el origen %s: %s",
+                    self.id,
+                    short(origen),
+                    exc,
+                )
+        if borrados:
+            log.info(
+                "copia %s: movimiento completado; %d origen(es) borrado(s)",
+                self.id,
+                borrados,
+            )
+
+    @staticmethod
+    def _borrar_arbol(raiz: str):
+        """Borra una carpeta origen y su contenido, de dentro hacia fuera."""
+        for actual, dirs, ficheros in os.walk(raiz, topdown=False):
+            for nombre in ficheros:
+                ruta = os.path.join(actual, nombre)
+                if os.path.islink(ruta) or not os.path.isdir(ruta):
+                    os.unlink(ruta)
+            for nombre in dirs:
+                ruta = os.path.join(actual, nombre)
+                if os.path.islink(ruta):
+                    os.unlink(ruta)
+                else:
+                    os.rmdir(ruta)
+        os.rmdir(raiz)
 
     def _ejecutar_plan(self, plan):
         for origen, rutas_destino, tam in plan:
@@ -683,15 +741,21 @@ class Operacion:
         try:
             with open(origen, "rb", buffering=0) as fuente:
                 offsets = {}
+                origen_mtp = es_mtp(origen)
                 for destino, ruta in pares:
                     self._asegurar_carpeta(destino, ruta)
                     offset = 0
                     try:
                         tam_destino = os.stat(ruta).st_size
-                        if 0 < tam_destino < tam_origen:
-                            offset = tam_destino
                     except OSError:
-                        offset = 0
+                        tam_destino = 0
+                    if origen_mtp or es_mtp(ruta):
+                        # MTP: no se puede continuar un parcial con garantías;
+                        # se rehace y se descuenta del progreso lo ya contado.
+                        if tam_destino:
+                            destino.copiados = max(0, destino.copiados - tam_destino)
+                    elif 0 < tam_destino < tam_origen:
+                        offset = tam_destino
                     offsets[id(destino)] = offset
 
                 # Punto de partida común para poder leer una sola vez. Lo que un
@@ -722,7 +786,7 @@ class Operacion:
                         break
                     for item in list(abiertos):
                         destino, salida, _base, escritos, ruta = item
-                        if not _intacto(ruta, escritos):
+                        if not es_mtp(ruta) and not _intacto(ruta, escritos):
                             self._destino_cambio(destino, ruta, escritos)
                             try:
                                 salida.close()
@@ -753,10 +817,10 @@ class Operacion:
                     salida.close()
                 except OSError:
                     pass
-                if not _intacto(ruta, escritos):
-                    self._destino_cambio(destino, ruta, escritos)
-                else:
+                if es_mtp(ruta) or _intacto(ruta, escritos):
                     self._completar_destino(destino, origen, ruta, tam_origen)
+                else:
+                    self._destino_cambio(destino, ruta, escritos)
             self._bloqueando = False
             self._tramo = 0
 
@@ -775,13 +839,19 @@ class Operacion:
 
         desplazamiento = 0
         modo = "wb"
+        # MTP no admite escritura aleatoria fiable: si hay un extremo MTP se
+        # rehace el fichero desde cero (y se descuenta lo que el plan contaba
+        # del parcial, para que la barra no engañe).
+        reanudable = not es_mtp(origen) and not es_mtp(ruta)
         try:
             if tam_origen is None:
                 tam_origen = os.stat(origen).st_size
             tam_destino = os.stat(ruta).st_size
-            if 0 < tam_destino < tam_origen:
+            if reanudable and 0 < tam_destino < tam_origen:
                 desplazamiento = tam_destino
                 modo = "r+b"
+            elif tam_destino and tam_destino != tam_origen:
+                destino.copiados = max(0, destino.copiados - tam_destino)
         except OSError:
             desplazamiento, modo = 0, "wb"
 
@@ -805,7 +875,9 @@ class Operacion:
                 if desplazamiento:
                     fuente.seek(desplazamiento)
                     salida.seek(desplazamiento)
-                usar_rango = hasattr(os, "copy_file_range")
+                # copy_file_range no se usa con MTP: el sistema de ficheros no
+                # lo soporta (o cruza dispositivos), así que va por bloques.
+                usar_rango = hasattr(os, "copy_file_range") and reanudable
                 while True:
                     if self._cancelado.is_set():
                         break
@@ -948,11 +1020,12 @@ class Motor:
         # ya está en el hilo principal de GTK (los oyentes se agregan ahí)
         pass
 
-    def crear(self, origenes, destinos) -> Operacion:
+    def crear(self, origenes, destinos, mover=False) -> Operacion:
         """Crea una copia hacia una o varias carpetas de destino.
 
         Con varios destinos se lee el origen una sola vez y se escribe en todos
-        a la vez (ver `Operacion._copiar_a_varios`).
+        a la vez (ver `Operacion._copiar_a_varios`). Con `mover=True` (que es lo
+        que pide «Cortar con Copiex») los orígenes se borran al terminar.
         """
         origenes = [os.path.abspath(o) for o in origenes]
         if not origenes:
@@ -973,6 +1046,15 @@ class Motor:
                     raise ErrorCopia(
                         f"El destino está dentro del origen ({short(destino)} ⊂ {short(origen)})"
                     )
+                # Pegar en la misma carpeta escribiría sobre el propio origen
+                # (y un «Cortar» lo borraría): mejor rechazarlo que perderlo.
+                objetivo = os.path.join(
+                    destino, os.path.basename(origen.rstrip(os.sep))
+                )
+                if os.path.abspath(objetivo) == os.path.abspath(origen):
+                    raise ErrorCopia(
+                        f"El destino es la misma carpeta que el origen ({short(origen)})"
+                    )
         # Las comprobaciones de disco (y su coste si un dispositivo no responde)
         # se hacen en el hilo de la copia: la tarea aparece al instante y, si la
         # ruta falla, la fila se marca con el error.
@@ -981,8 +1063,8 @@ class Motor:
             len(origenes),
             len(destinos),
         )
-        op_id = self.store.crear(origenes, destinos)
-        op = Operacion(op_id, origenes, destinos, self.store)
+        op_id = self.store.crear(origenes, destinos, mover=mover)
+        op = Operacion(op_id, origenes, destinos, self.store, mover=mover)
         self._nueva(op)
         op.iniciar()
         return op
@@ -1011,6 +1093,7 @@ class Motor:
                 op.archivos_ok = fila["copiados_archivos"]
                 op.estado = "paused"
                 op.pausa_manual = bool(fila.get("pausa_manual"))
+                op.mover = bool(fila.get("mover"))
                 op.creado = fila["creado"]
                 for destino, datos in zip(op.destinos, datos_destinos):
                     destino.total_bytes = datos["total_bytes"]

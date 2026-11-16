@@ -63,15 +63,28 @@ def data_dir() -> str:
 
 
 def uri_to_path(uri: str) -> str:
-    """Convierte una URI file:// (o una ruta) en una ruta local."""
+    """Convierte una URI en ruta local.
+
+    Acepta rutas locales, `file://` y `mtp://` (móviles y cámaras). MTP se
+    resuelve a su punto de montaje de gvfs-fuse, así el motor sigue trabajando
+    con rutas normales; sin gvfs-fuse no hay ruta y se avisa con claridad.
+    """
     uri = (uri or "").strip()
     if not uri:
         raise ValueError("Ruta vacía")
     parsed = urllib.parse.urlparse(uri)
     if parsed.scheme == "":
         return os.path.abspath(os.path.expanduser(uri))
+    if parsed.scheme == "mtp":
+        path = _ruta_gvfs(uri)
+        if not path:
+            raise ValueError(
+                f"No se pudo acceder a «{uri}»: hace falta gvfs-fuse "
+                "(sudo apt install gvfs-fuse) y el dispositivo montado"
+            )
+        return path
     if parsed.scheme != "file":
-        raise ValueError(f"Solo se admiten rutas locales, no «{uri}»")
+        raise ValueError(f"Solo se admiten rutas locales o mtp://, no «{uri}»")
     path = urllib.parse.unquote(parsed.path)
     if parsed.netloc and parsed.netloc not in ("", "localhost"):
         path = f"//{parsed.netloc}{path}"
@@ -80,12 +93,45 @@ def uri_to_path(uri: str) -> str:
     return path
 
 
+def _ruta_gvfs(uri: str) -> str | None:
+    """Ruta de gvfs-fuse para una URI de gvfs (None si no está disponible)."""
+    try:
+        import gi
+
+        gi.require_version("Gio", "2.0")
+        from gi.repository import Gio
+
+        return Gio.File.new_for_uri(uri).get_path()
+    except Exception:
+        return None
+
+
+def es_mtp(ruta: str) -> bool:
+    """¿La ruta es un montaje MTP a través de gvfs-fuse?"""
+    return bool(ruta) and "/gvfs/mtp:host=" in os.path.abspath(ruta)
+
+
+def ruta_a_uri(ruta: str) -> str:
+    """URI mostrable de una ruta: `mtp://…` si es un montaje MTP."""
+    ruta = os.path.abspath(ruta)
+    marca = "/gvfs/mtp:host="
+    if marca in ruta:
+        host, _, resto = ruta.split(marca, 1)[1].partition("/")
+        return "mtp://" + urllib.parse.quote(host, safe="") + "/" + urllib.parse.quote(
+            resto, safe="/"
+        )
+    return path_to_uri(ruta)
+
+
 def path_to_uri(path: str) -> str:
     return "file://" + urllib.parse.quote(os.path.abspath(path))
 
 
 def short_path(path: str) -> str:
-    """Ruta abreviada mostrada en la interfaz («~/Descargas/...»)."""
+    """Ruta abreviada mostrada en la interfaz («~/Descargas/...», `mtp://…`)."""
+    if es_mtp(path):
+        # La URI va percent-encoded, pero en una etiqueta se lee mejor sin eso.
+        return urllib.parse.unquote(ruta_a_uri(path))
     home = os.path.expanduser("~")
     path = os.path.abspath(path)
     if path == home:
