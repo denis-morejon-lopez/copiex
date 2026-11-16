@@ -131,7 +131,7 @@ class Bandeja:
         # Al crearse la bandeja todavía no hay ventana: la opción es «Mostrar».
         self._etiqueta = texto("menu.mostrar")
         self._revision = 1
-        # Icono propio si está instalado (./install.sh); si no, el del tema.
+        # Icono propio si está instalado (paquete .deb); si no, el del tema.
         self._icono = self._elegir_icono()
 
         self.conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)

@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+if [ "${1:-}" = "purge" ]; then
+    rm -rf /var/lib/copiex
+    rm -f /var/log/copiex-dependencias.log
+fi
+# Restos de una ejecución interrumpida (nunca afecta a los repos del sistema).
+rm -f /var/lib/copiex/copiex-offline.list
+exit 0

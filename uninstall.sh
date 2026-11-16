@@ -1,5 +1,9 @@
 #!/bin/sh
-# Desinstalación completa de Copiex en el usuario actual (sin privilegios).
+# Desinstalación de una instalación ANTIGUA de usuario (sin privilegios).
+#
+# El paquete .deb se quita con:  sudo apt remove copiex
+# Este script sigue sirviendo para limpiar la extensión y los datos de las
+# instalaciones que hacía install.sh, y para borrar el historial y los registros.
 #
 # Quita:
 #   · la extensión de Nautilus (menús «Copiar con Copiex» y «Pegar con Copiex»)
@@ -24,7 +28,7 @@ for arg in "$@"; do
         --conservar-datos) CONSERVAR=1 ;;
         --simular|-n) SIMULAR=1 ;;
         -h|--ayuda)
-            sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -81,6 +85,15 @@ parar_aplicacion() {
         kill -9 "$pid" 2>/dev/null || true
     done
 }
+
+if command -v dpkg-query >/dev/null 2>&1 \
+        && dpkg-query -W -f='${Status}' copiex 2>/dev/null \
+            | grep -q "install ok installed"; then
+    echo "AVISO: Copiex está instalado como paquete .deb."
+    echo "       Para quitar el paquete:  sudo apt remove copiex"
+    echo "       Este script solo limpia una instalación antigua de usuario."
+    echo
+fi
 
 echo "Se va a desinstalar Copiex:"
 echo "  extensión:  $EXTENSIONES/copiex.py"
@@ -164,6 +177,9 @@ fi
 
 echo
 echo "Copiex desinstalado."
+if dpkg-query -W -f='${Status}' copiex 2>/dev/null | grep -q "install ok installed"; then
+    echo "  · El paquete .deb sigue instalado; para quitarlo:  sudo apt remove copiex"
+fi
 echo "  · El paquete de sistema python3-nautilus NO se toca (lo pueden usar"
 echo "    otras extensiones); si quieres quitarlo: sudo apt remove python3-nautilus"
 if [ "$CONSERVAR" -eq 1 ]; then

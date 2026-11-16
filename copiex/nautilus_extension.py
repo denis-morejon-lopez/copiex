@@ -13,8 +13,9 @@ La extensión es solo un puente: envía {origen…, destino} por el socket UNIX
 de Copiex y la copia (progreso, pausa, reanudación) la hace la aplicación.
 
 Requiere python3-nautilus:  sudo apt install python3-nautilus
-Instalación:  ./install.sh  (copia este fichero a
-~/.local/share/nautilus-python/extensions/copiex.py)
+Instalación:  paquete .deb de Copiex (lo copia a
+/usr/share/nautilus-python/extensions/copiex.py); las instalaciones antiguas
+de usuario lo tenían en ~/.local/share/nautilus-python/extensions/copiex.py.
 
 Compatible con la API de Nautilus que traiga el sistema:
   * Ubuntu 24.04 (Nautilus 46): API 4.0
@@ -173,9 +174,17 @@ def _textos() -> dict:
         linea = info.get_commandline() if info is not None else ""
         argv = list(GLib.shell_parse_argv(linea)[1]) if linea else []
         if argv:
-            ruta = os.path.join(os.path.dirname(os.path.abspath(argv[0])), "menu.yaml")
-            if os.path.isfile(ruta):
-                textos.update(_leer_seccion_nautilus(ruta))
+            candidatas = [
+                os.path.join(os.path.dirname(os.path.abspath(argv[0])), "menu.yaml"),
+                # Instalación con el paquete .deb: el lanzador está en /usr/bin
+                # y los datos de la aplicación, en /opt/copiex.
+                "/opt/copiex/menu.yaml",
+                "/usr/share/copiex/menu.yaml",
+            ]
+            for ruta in candidatas:
+                if os.path.isfile(ruta):
+                    textos.update(_leer_seccion_nautilus(ruta))
+                    break
     except Exception:
         pass  # sin menu.yaml se usan los textos de reserva
     _textos_menu = textos
@@ -232,8 +241,9 @@ def _arrancar_app(oculto: bool = True) -> bool:
     con él la copia no llega a empezar. Arrancándolo por D-Bus el fork lo hace
     el bus, que es pequeño y de un solo hilo, y la llamada no bloquea.
 
-    Hace falta el servicio `com.copiex.Manager.service`, que instala
-    install.sh. Si no está, se recurre al lanzamiento directo.
+    Hace falta el servicio `com.copiex.Manager.service`, que instala el
+    paquete .deb (install.sh en instalaciones antiguas). Si no está, se recurre
+    al lanzamiento directo.
     """
     try:
         bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)

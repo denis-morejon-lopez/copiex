@@ -37,24 +37,28 @@ Abre el proyecto en Freebuff y pega algo como:
 
 La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hechas.
 
-### Estado exacto al cerrar la sesión del 16/11
+### Estado actual al retomar (16/11/2026)
 
-- **Git:** último commit **`ee884ac`** «Implementamos: a) Cortar y pegar b) Cambiar el
-  icono de la esquina a color: verde», que ya incluye el código de MTP, «Cortar con
-  Copiex» y el icono de bandeja. Quedan **sin commitear** esta documentación actualizada y
-  un cambio de `menu.yaml` (la descripción de «Acerca de», acortada por el usuario).
-- **En marcha:** la app quedó en la bandeja (PID 26733 al escribir esto; el PID cambia,
-  comprobar con `ps -eo pid,args | grep "[p]ython3 -m copiex"`) y Nautilus recargado con la
+- **Git:** último commit **`ff317f2`** «Implementamos: a) Cortar y pegar b) Cambiar el
+  icono de la esquina a color: verde», que ya incluye **todo** el código de MTP, «Cortar
+  con Copiex», icono de bandeja, `menu.yaml` y esta documentación. Después se añadieron el
+  empaquetado `.deb`, `upgrade.sh` y la retirada de `install.sh`, **sin commitear**.
+- **En marcha:** al retomar, la app **no está arrancada**; se levanta con
+  `./copiex-launcher --bandeja` (o se activa sola desde Nautilus). Nautilus tiene la
   extensión instalada idéntica a la fuente.
-- **Historial real:** 36 filas y 9 en `destinos`; la migración de la columna `mover` ya se
-  aplicó al abrir la app. No se tocó ninguna fila en las pruebas (se usaron BD en `/tmp`).
+- **Historial real:** **38 filas** (29 `done`, 5 `cancelled`, 4 `error`) y 13 en
+  `destinos`; la migración de la columna `mover` ya está aplicada. No se tocó ninguna fila
+  en las pruebas (se usaron BD en `/tmp`).
 - **Cerrado y probado:** MTP en ambos sentidos; «Cortar» a uno y a N destinos (motor, IPC y
-  extensión); el icono de la bandeja anuncia `com.copiex.Manager` (color).
-- **Pendiente del usuario:** probar «Cortar con Copiex» desde el menú real (a una carpeta y
-  con «N destinos») y confirmar que en el panel ya se ve la «C» verde. Mover hacia/desde
-  MTP y mover carpetas vacías quedan como mejoras opcionales.
-- **Siguiente paso:** si no pide algo nuevo, esperar esa prueba; no rehacer lo ya verificado
-  ni hacer commit/push sin que lo pida.
+  extensión), confirmado por el usuario; el icono de la bandeja anuncia
+  `com.copiex.Manager` (color).
+- **Pendiente del usuario:** confirmar que en el panel ya se ve la «C» verde. Mover
+  hacia/desde MTP y mover carpetas vacías quedan como mejoras opcionales.
+- **Paquete .deb:** `copiex_1.0.0_amd64.deb` (60 MB) en la raíz y el empaquetado en
+  `packaging/`; `upgrade.sh` actualiza deps, reconstruye el `.deb` y reinstala. Está sin
+  commitear. Detalles y límites en 3 undevicies.
+- **Siguiente paso:** si no pide algo nuevo, no rehacer lo ya verificado ni hacer
+  commit/push sin que lo pida.
 
 ## 2. Qué está hecho y verificado
 
@@ -69,9 +73,9 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
 | Portapapeles de Nautilus (Ctrl+C → «Pegar con Copiex») | **Hecho el 12/11.** Se lee `x-special/gnome-copied-files`, `text/uri-list` y el formato antiguo; se escribe con esos mismos MIME. Verificado con el portapapeles real y de extremo a extremo. Detalles en 3 bis. |
 | Workers / hilos | **Retirado del pliego el 13/11** a petición del usuario: ya no son un requerimiento. Se midió 1 GB con 1/2/4/8 hilos → 0,58 / 0,39 / 0,41 / 0,43 s, sin ganancia real, y en USB o discos mecánicos suelen empeorar el tiempo. Se retiró también el código (tramos, fichero de estado, config y diálogo). |
 | Reanudación automática (requerimiento 8, errores 1 y 2) | **Hecho el 12/11.** La copia continúa sola cuando vuelven origen y destino, también tras cerrar la aplicación; las pausas manuales se respetan y las filas con error se pueden reintentar o cancelar. Detalles en 3 quater. |
-| Arranque de Copiex al pulsar «Copiar con Copiex» | **Hecho el 12/11 y reforzado el 14/11.** Si no estaba en marcha, se arranca solo en la bandeja, sin abrir ventana. Desde el 14/11 lo pide al bus de sesión (servicio `com.copiex.Manager` que instala `install.sh`): **0,404 s** en frío. |
+| Arranque de Copiex al pulsar «Copiar con Copiex» | **Hecho el 12/11 y reforzado el 14/11.** Si no estaba en marcha, se arranca solo en la bandeja, sin abrir ventana. Desde el 14/11 lo pide al bus de sesión (servicio `com.copiex.Manager`, que instala el `.deb`): **0,404 s** en frío. |
 | Latencia al pegar | **Medida el 12/11; re-medida el 14/11.** Antes 1,57 s en frío y hasta ~4 s con los reintentos ciegos; ahora **0,003 s** con la app abierta y **0,404 s** en frío por D-Bus. Detalles en 3 ter. |
-| Historial de la base de datos | **36 filas al 16/11** y 9 filas en `destinos`, todas copias reales del usuario. Columnas de `copias`: `id, origenes, destino, total_bytes, copiados_bytes, total_archivos, copiados_archivos, estado, error, pausa_manual, mover, creado, actualizado` (`mover` se añadió el 16/11 con migración automática). Tabla `destinos` (desde el 13/11): una fila por carpeta destino con su progreso y estado; en `copias.destino` se guarda el primero. |
+| Historial de la base de datos | **38 filas al 16/11** (29 `done`, 5 `cancelled`, 4 `error`) y 13 filas en `destinos`, todas copias reales del usuario. Columnas de `copias`: `id, origenes, destino, total_bytes, copiados_bytes, total_archivos, copiados_archivos, estado, error, pausa_manual, mover, creado, actualizado` (`mover` se añadió el 16/11 con migración automática). Tabla `destinos` (desde el 13/11): una fila por carpeta destino con su progreso y estado; en `copias.destino` se guarda el primero. |
 | «Acerca de» + `menu.yaml` (requerimientos 10 y 11) | **Hecho el 13/11.** Acción `app.acerca` con `Adw.AboutDialog` (versión de `copiex/__init__.py` y descripción de `menu.yaml`); menús de ventana, bandeja y Nautilus, y los diálogos de origen/destino, leen sus textos de `menu.yaml` mediante `copiex/menu.py` (lector YAML propio, con caché y valores por defecto). Detalles en 3 decies. |
 | Alerta sonora y «Eliminar» (requerimiento 9) | **Hecho el 13/11.** `copiex/sound.py` reproduce el audio de `sounds/` (manda `copy-finished.*`) una sola vez por copia terminada; «Cancelar» deja paso a «Eliminar», que quita la fila sin borrar el historial. El usuario confirmó que la alarma suena. Detalles en 3 undecies. |
 | Nombres de ficheros y carpetas en inglés | **Hecho el 13/11.** `sound.py`, `watcher.py`, `nautilus_extension.py`, `copiex-launcher`, `sounds/`, `TODO.md`, `NOTES.md`. Los identificadores internos (clases, funciones, atributos) siguen en español a propósito. |
@@ -93,7 +97,7 @@ N destinos» ni su ventana de selección: se comprobó que el menú devuelve la 
 sus textos y que la ventana se construye y se cierra. Tampoco se ha repetido la prueba
 real de arranque con la app cerrada desde el menú; sí en banco, por D-Bus (0,404 s).
 
-## 2 bis. Mapa del código (4 645 líneas al 16/11, con scripts y plantillas)
+## 2 bis. Mapa del código (4 645 líneas al 16/11, sin contar `packaging/`)
 
 | Fichero | Líneas | Responsabilidad |
 |---|---|---|
@@ -113,7 +117,8 @@ real de arranque con la app cerrada desde el menú; sí en banco, por D-Bus (0,4
 | `icons/` | — | Icono propio: `com.copiex.Manager.svg` (color) y `com.copiex.Manager-symbolic.svg` (una tinta, para la bandeja). |
 | `brand/` | — | Propuestas de logo descartadas y `preview.html`, la galería con la que se eligió el icono. |
 | `menu.yaml` | 50 | Nombres de las opciones de menú y textos de las ventanas emergentes, incluida la descripción de «Acerca de» y los de la selección de varios destinos. |
-| `install.sh`, `uninstall.sh`, `copiex-launcher`, `com.copiex.Manager.desktop.in`, `com.copiex.Manager.service.in` | — | Instalación y desinstalación completas (extensión, escritorio, servicio D-Bus, iconos, datos), lanzador, entrada de escritorio y plantilla del servicio `com.copiex.Manager` que usa la extensión para arrancar la app sin `fork`. |
+| `uninstall.sh`, `copiex-launcher`, `com.copiex.Manager.desktop.in`, `com.copiex.Manager.service.in` | — | Limpieza de instalaciones antiguas de usuario (extensión, escritorio, servicio D-Bus, iconos, datos), lanzador, entrada de escritorio y plantilla del servicio `com.copiex.Manager` que usa la extensión para arrancar la app sin `fork`. |
+| `packaging/`, `upgrade.sh` | — | Empaquetado `.deb`: `build-deb.sh`, `resolver.py`, `deps.txt`, `postinst`, `postrm` y los helpers `instalar-dependencias`/`copiex-dependencias`. Genera un repositorio APT local con los `.deb` de las dependencias para instalar sin red. `upgrade.sh` actualiza las dependencias, reconstruye el `.deb` con las versiones actuales y reinstala Copiex. |
 
 Puntos de entrada: `./copiex-launcher` (ejecuta `PYTHONPATH=. python3 -m copiex`) y,
 desde Nautilus, la extensión instalada en
@@ -204,8 +209,9 @@ Cambios:
   trazas por etapa. Sustituye al hilo `copiex-ipc`, que podía quedarse esperando el GIL y
   no llegaba ni a conectar. Una petición ya enviada no se reenvía (duplicaría la copia).
 - `_arrancar_app()` pide al bus de sesión `StartServiceByName` de `com.copiex.Manager`;
-  `install.sh` instala `~/.local/share/dbus-1/services/com.copiex.Manager.service`
-  (`Exec=… --gapplication-service`). Así el fork lo hace el bus y no Nautilus. Si el bus
+  el `.deb` instala `/usr/share/dbus-1/services/com.copiex.Manager.service`
+  (`Exec=… --gapplication-service`; antes lo hacía `install.sh` en el usuario). Así el
+  fork lo hace el bus y no Nautilus. Si el bus
   no pudiera, `_arrancar_app_directo()` lee el `Exec` del `.desktop`, añade `--bandeja` y
   lanza desde el bucle principal (respaldo, no el camino normal).
 - `_enviar()` sigue existiendo solo para pruebas síncronas; la producción pasa por
@@ -362,7 +368,7 @@ copia de 2 GB pausada, reanudada, cancelada a 406 MB y un origen inexistente: el
 cuenta la historia completa. Tras el cambio hay que **reiniciar la app** para que use este
 registro (hecho: instancia reiniciada en bandeja).
 
-## 3 nonies. Instalación y desinstalación completas (13/11)
+## 3 nonies. Instalación y desinstalación completas (13/11; `install.sh` retirado el 16/11)
 
 **`install.sh`** (revisado): comprueba que se ejecuta junto al proyecto, avisa si faltan
 `python3-gi`, `gir1.2-gtk-4.0` o `gir1.2-adw-1` (con el `apt install` exacto), copia la
@@ -418,13 +424,13 @@ descripción de `aplicacion.descripcion`. La versión sale de `copiex/__init__.p
 **Extensión de Nautilus**: se instala como fichero suelto y no puede importar el paquete,
 así que repite un lector mínimo para la sección `nautilus:`. Encuentra `menu.yaml` a partir
 de la ruta del lanzador del `.desktop` (mismo directorio) y, si no está, usa las etiquetas
-de siempre (`_TEXTO_DEFECTO`). Estrena los cambios con `./install.sh` + `nautilus -q`.
+de siempre (`_TEXTO_DEFECTO`). Estrena los cambios con `./upgrade.sh` + `nautilus -q`.
 
 Comprobado: compilación de todo el paquete; textos del fichero real; con un `menu.yaml`
 temporal (`COPIEX_MENU`) cambian las etiquetas de la ventana («Copiar ahora», «Sobre
 Copiex», subtítulo «Copias de prueba») y las claves ausentes caen en su valor por defecto;
 `app.acerca()` construye y presenta el diálogo sin errores; la extensión devuelve las
-cuatro cadenas de `menu.yaml`; `./install.sh` copia la extensión idéntica. La ventana de
+cuatro cadenas de `menu.yaml`; entonces `./install.sh` copiaba la extensión idéntica. La ventana de
 «Acerca de» y el menú de Nautilus no se han visto con los ojos (Wayland), pero se
 construyen sin error: falta el clic real del usuario.
 
@@ -531,9 +537,10 @@ turquesa con una barra de progreso debajo. Quedó instalado así:
   pero **la bandeja ya no la usa**: el 16/11 se cambió a la variante a color porque la
   simbólica se veía como un punto con una barrita. `Bandeja.ICONO` apunta a
   `com.copiex.Manager`; si el tema no lo tiene, cae en `edit-copy` y nunca queda un hueco.
-- `install.sh` los copia a `~/.local/share/icons/hicolor/scalable/apps`, refresca
-  `gtk-update-icon-cache` y la entrada de escritorio pasa a `Icon=com.copiex.Manager`.
-  `uninstall.sh` los borra y refresca la caché (comprobado con `--simular`).
+- El `.deb` los instala en `/usr/share/icons/hicolor/scalable/apps` y refresca
+  `gtk-update-icon-cache` en el `postinst`; antes `install.sh` los copiaba a
+  `~/.local/share/icons`. `uninstall.sh` limpia la copia de usuario antigua (comprobado
+  con `--simular`).
 - La ventana fija `set_icon_name("com.copiex.Manager")`, muestra el icono (22 px) dentro de
   la cabecera **justo después del título «Copiex»** (un `Gtk.Image` añadido al
   `Adw.WindowTitle` dentro de un `Gtk.Box`), «Acerca de» usa el mismo nombre y la bandeja
@@ -616,8 +623,9 @@ Fallos vistos en esa prueba y corregidos ese día:
     bloqueantes con `GLib.io_add_watch` en el bucle principal de Nautilus, con 20 s de
     límite, reintento de conexión cada 200 ms y trazas por etapa. El arranque se pide al
     bus de sesión (`StartServiceByName`), que hace el fork fuera de Nautilus;
-    `install.sh` instala `~/.local/share/dbus-1/services/com.copiex.Manager.service`
-    (`Exec=… --gapplication-service`). Si el bus no pudiera, se recurre al lanzamiento
+    el `.deb` instala `/usr/share/dbus-1/services/com.copiex.Manager.service`
+    (`Exec=… --gapplication-service`; antes `install.sh`, en el usuario). Si el bus no
+    pudiera, se recurre al lanzamiento
     directo desde el bucle principal. Una vez enviada, la petición **no se reenvía**
     (reenviar un `copy` duplicaría la copia): si no hay respuesta, se avisa.
   - Se mantienen los arreglos anteriores (enviar antes de cerrar la modal, cierre
@@ -720,8 +728,8 @@ duplicar lógica.
 - Extensión: el portapapeles distingue `cut`/`copy`, «Cortar con Copiex» recuerda la
   acción, tanto el pegado simple como el de N destinos envían `move`, y el menú devuelve
   las etiquetas «Copiar con Copiex» y «Cortar con Copiex».
-- Migración sobre una copia del historial real: la columna `mover` se añade y las 36 filas
-  se conservan.
+- Migración sobre una copia del historial real: la columna `mover` se añade y todas las
+  filas existentes se conservan.
 
 No probado: mover desde/hacia MTP (no había móvil conectado al terminar) ni el clic real
 en el menú de Nautilus (Wayland). Limitación heredada: una carpeta **vacía** sigue dando
@@ -772,6 +780,51 @@ No probado con el cable desconectado físicamente (el vigilante usa la misma com
 que con un USB), con varios destinos MTP a la vez ni con el clic real en el menú de
 Nautilus sobre una carpeta del teléfono; eso queda para la prueba del usuario.
 
+## 3 undevicies. Paquete .deb con dependencias offline (16/11)
+
+En `packaging/` hay un empaquetado completo que genera
+`copiex_1.0.0_amd64.deb` en la raíz del proyecto (unos 60 MB).
+
+- **Instalación:** el `.deb` solo declara `Depends: python3`, así que `apt`/`dpkg`
+  instalan Copiex aunque falten GTK, libadwaita, Nautilus o gvfs. La aplicación queda en
+  `/opt/copiex`, con lanzador `/usr/bin/copiex`, escritorio, iconos, servicio D-Bus y
+  extensión de Nautilus en `/usr/share/nautilus-python/extensions/copiex.py`.
+- **Dependencias:** `packaging/deps.txt` lista los paquetes necesarios; `resolver.py`
+  calcula sus dependencias (2 niveles por defecto) y `build-deb.sh` descarga los `.deb`
+  de la misma versión de Ubuntu, crea un repositorio APT local en
+  `/usr/share/copiex/offline` (183 paquetes, 60 MB) y lo mete en el paquete.
+- **Sin Internet:** el `postinst` lanza `/usr/lib/copiex/instalar-dependencias` en segundo
+  plano (durante el postinst dpkg mantiene el candado), que añade una fuente temporal
+  `file:/usr/share/copiex/offline`, actualiza solo sus listas y instala lo que falte.
+  Queda en `/var/log/copiex-dependencias.log`; `sudo copiex-dependencias` reintenta.
+- **Con Internet:** si hay terminal interactiva y conexión, el `postinst` pregunta
+  «¿Actualizar los paquetes necesarios desde Internet…? [S/n]». Si se acepta, el helper
+  hace `apt-get update` e instala/actualiza desde Ubuntu; si falla, cae al repositorio
+  local. `COPIEX_ACTUALIZAR=si|no` evita la pregunta.
+- **Migración:** si existía la extensión de usuario de `install.sh`, el `postinst` la
+  renombra a `.guardada-por-copiex-deb` para que Nautilus no cargue dos Copiex y muestre
+  el menú duplicado.
+- **Actualizar:** `./upgrade.sh` actualiza las listas, actualiza las dependencias
+  directas y las transitivas ya instaladas, reconstruye el `.deb` (descargando las
+  versiones actuales de las 183 dependencias) y reinstala Copiex con `apt-get --reinstall`,
+  aunque la versión no cambie. No se ejecuta con sudo. Después hay que reiniciar Nautilus
+  (`nautilus -q`).
+- **Construcción:** `./packaging/build-deb.sh` (necesita Internet y `dpkg-dev`).
+  `COPIEX_DEPS_NIVEL` y `COPIEX_ARQ` permiten cambiar niveles y arquitectura.
+- **`install.sh` retirado:** el `.deb` cubre la instalación y `upgrade.sh` la actualización.
+  `uninstall.sh` queda solo para limpiar instalaciones antiguas de usuario.
+
+Comprobado el 16/11: `dpkg-deb -I` (control, `Depends: python3`, 183 `.deb`),
+`apt-get -s install ./copiex_1.0.0_amd64.deb` (solo Copiex como paquete nuevo), la
+importación del código extraído y `menu.yaml` desde `/opt/copiex`, y una simulación de
+`apt-get update`/`install` contra el repositorio local. **No** se ha instalado de verdad
+(hace falta root) ni probado en una máquina sin las dependencias; la pregunta interactiva
+tampoco se ha podido ver con un `apt install` real.
+
+Limitaciones: el repositorio es específico de la arquitectura y de la versión de Ubuntu
+con la que se construye; `menu.yaml` en `/opt` lo gestiona el paquete y una actualización
+puede reemplazarlo.
+
 ## 4. Pendientes, por orden sugerido
 
 No hay trabajo pendiente del pliego. Queda la prueba real del usuario con el menú de
@@ -800,13 +853,14 @@ y mover hacia/desde MTP.
 - **Rutas:** socket `$XDG_RUNTIME_DIR/copiex-1000/copiex.sock`
   (`/run/user/1000/...`); base de datos
   `~/.local/share/copiex/historial.db`, tabla `copias`.
-- **Desinstalar:** `./uninstall.sh` (pregunta; `--simular` para ver antes lo que
-  borraría, `--conservar-datos` para quedarse con historial y registros).
-- **Instalar cambios de la extensión:** `./install.sh` copia
-  `copiex/nautilus_extension.py` a `~/.local/share/nautilus-python/extensions/copiex.py`.
-  Después hay que reiniciar Nautilus (`nautilus -q`) o no se recarga.
-- **Servicio D-Bus:** `./install.sh` instala
-  `~/.local/share/dbus-1/services/com.copiex.Manager.service`; es lo que permite que la
+- **Desinstalar:** el `.deb` con `sudo apt remove copiex`; una instalación antigua de
+  usuario con `./uninstall.sh` (pregunta; `--simular` para ver antes lo que borraría,
+  `--conservar-datos` para quedarse con historial y registros).
+- **Instalar cambios de la extensión:** `./upgrade.sh` reconstruye e instala el `.deb`
+  (copia la extensión a `/usr/share/nautilus-python/extensions/copiex.py`). Después hay
+  que reiniciar Nautilus (`nautilus -q`) o no se recarga.
+- **Servicio D-Bus:** lo instala el `.deb` en
+  `/usr/share/dbus-1/services/com.copiex.Manager.service`; es lo que permite que la
   extensión arranque Copiex sin hacer `fork` desde Nautilus. Si falta, el arranque en frío
   cae en `_arrancar_app_directo()` (más lento y frágil). Comprobar con
   `busctl --user list | grep copiex` y `cat` del `.service`.
@@ -848,18 +902,18 @@ y mover hacia/desde MTP.
 
 Ubuntu 26.04 «resolute», GNOME 50.1, Nautilus 50.2.2, GTK 4.22.4, PyGObject 3.56.2,
 Wayland. El 16/11 había un Android montado por MTP (`gvfsd-mtp` y `gvfs-fuse` 1.60). El
-proyecto **es un repositorio git** (rama `main`; último commit **`ee884ac`** «Implementamos:
+proyecto **es un repositorio git** (rama `main`; último commit **`ff317f2`** «Implementamos:
 a) Cortar y pegar b) Cambiar el icono de la esquina a color: verde»; remoto `repo-copiex`
-en GitHub). Ese commit ya guarda el código del 13, 14 y 16/11: motor de varios destinos,
-MTP, «Cortar», icono de bandeja, extensión sin hilos, `install.sh`, etc. **Sin commitear
-quedan solo** `TODO.md`, `AGENTS.md`, `NOTES.md` y un cambio de `menu.yaml` (descripción
-más corta de «Acerca de», hecho por el usuario).
-Historial real al cerrar la sesión: 36 filas y 9 filas en `destinos`. La app quedó en
-marcha en la bandeja (pid 26733 al escribir esto; el PID cambia, comprobar con
-`ps -eo pid,args | grep "[p]ython3 -m copiex"`), reiniciada el 16/11 para estrenar MTP,
-«Cortar con Copiex» y el icono a color, y Nautilus recargado (`nautilus -q`) con la
-extensión idéntica a la fuente. Los `.pyc` de `copiex/__pycache__/` se colaron en el
-commit `ee884ac`; no aportan nada y conviene sacarlos del control de versiones. **Aviso de seguridad:** la URL del remoto guarda un
+en GitHub). Ese commit guarda el trabajo del 13, 14 y 16/11: motor de varios destinos,
+MTP, «Cortar», icono de bandeja, extensión sin hilos, `install.sh`, `menu.yaml` y esta
+documentación. Después se añadieron el `.deb`, `upgrade.sh` y la retirada de `install.sh`,
+sin commitear.
+Historial real al retomar: **38 filas** y 13 filas en `destinos`. La app **no está en
+marcha**; se arranca con `./copiex-launcher --bandeja` (o la activa Nautilus) y el PID
+cambia, comprobar con `ps -eo pid,args | grep "[p]ython3 -m copiex"`. Nautilus está
+recargado (`nautilus -q`) con la extensión idéntica a la fuente. Los `.pyc` de
+`copiex/__pycache__/` se colaron en el commit `ee884ac`; no aportan nada y conviene
+sacarlos del control de versiones. **Aviso de seguridad:** la URL del remoto guarda un
 token de GitHub incrustado en `.git/config`; conviene rotarlo y usar un ayudante de
 credenciales. No hagas commit ni push sin que el usuario lo pida.
 

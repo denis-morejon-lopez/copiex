@@ -1,0 +1,82 @@
+#!/bin/sh
+# postinst de Copiex: refresca escritorio/iconos y prepara las dependencias.
+#
+# El paquete se instala siempre (solo depende de python3). Las dependencias de
+# GNOME/Nautilus/MTP se instalan después con /usr/lib/copiex/instalar-dependencias:
+#   · si hay Internet y el usuario dice que sí, se actualizan desde los repos
+#     de Ubuntu;
+#   · si no hay Internet (o dice que no), se usan los .deb incluidos en
+#     /usr/share/copiex/offline.
+# dpkg mantiene el candado mientras corre este script, así que el instalador de
+# dependencias se lanza en segundo plano y espera a que se libere.
+set -eu
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications >/dev/null 2>&1 || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true
+fi
+
+MODO=local
+
+elegir_modo() {
+    case "${COPIEX_ACTUALIZAR:-auto}" in
+        si|sí|s|yes|y|true|1) echo actualizar; return ;;
+        no|n|false|0) echo local; return ;;
+    esac
+    # Sin Internet solo se puede usar el paquete offline.
+    if ! timeout 4 getent hosts archive.ubuntu.com >/dev/null 2>&1; then
+        echo local
+        return
+    fi
+    # La pregunta solo tiene sentido si hay una terminal interactiva. Con un
+    # gestor gráfico o DEBIAN_FRONTEND=noninteractive se usa el paquete offline.
+    if [ ! -t 0 ] || [ "${DEBIAN_FRONTEND:-}" = "noninteractive" ]; then
+        echo local
+        return
+    fi
+    # La función se llama dentro de $(...): los avisos van a stderr para que
+    # no acaben formando parte del valor devuelto.
+    printf '\nCopiex: hay conexión a Internet.\n' >&2
+    printf '¿Actualizar los paquetes necesarios desde Internet antes de instalar Copiex? [S/n] ' >&2
+    respuesta=""
+    read -r respuesta || respuesta=""
+    case "$respuesta" in
+        n|N|no|No|NO) echo local ;;
+        *) echo actualizar ;;
+    esac
+}
+
+MODO=$(elegir_modo)
+
+# Migración desde una instalación antigua de usuario (install.sh): si había una
+# extensión en ~/.local/share, Nautilus cargaría dos Copiex (menús duplicados).
+for casa in /home/*; do
+    [ -d "$casa" ] || continue
+    extension="$casa/.local/share/nautilus-python/extensions/copiex.py"
+    if [ -f "$extension" ]; then
+        mv "$extension" "$extension.guardada-por-copiex-deb" 2>/dev/null || true
+        printf 'Copiex: se apartó la extensión de usuario %s\n' "$extension"
+    fi
+done
+
+mkdir -p /var/lib/copiex /var/log
+
+# systemd-run deja el trabajo fuera del proceso de dpkg y sobrevive a que apt
+# termine. Si no hay systemd, se usa setsid.
+if command -v systemd-run >/dev/null 2>&1 && \
+   systemd-run --quiet --collect --unit=copiex-dependencias \
+       --description="Instalación de dependencias de Copiex" \
+       /usr/lib/copiex/instalar-dependencias "$MODO" >/dev/null 2>&1; then
+    :
+else
+    setsid /usr/lib/copiex/instalar-dependencias "$MODO" \
+        </dev/null >/dev/null 2>&1 &
+fi
+
+printf '\nCopiex instalado. Las dependencias se están preparando en segundo plano.\n'
+printf 'Puedes seguir el progreso en /var/log/copiex-dependencias.log.\n'
+printf 'Si usas Nautilus, reinícialo para cargar el menú: nautilus -q\n'
+
+exit 0

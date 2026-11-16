@@ -1,0 +1,17 @@
+#!/bin/sh
+# Reintenta la instalación de las dependencias de Copiex.
+#   sudo copiex-dependencias          # usa el paquete offline incluido
+#   sudo copiex-dependencias online   # actualiza desde Internet
+set -eu
+case "${1:-local}" in
+    online|actualizar|internet) MODO=actualizar ;;
+    *) MODO=local ;;
+esac
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Hace falta root:  sudo copiex-dependencias ${1:-local}" >&2
+    exit 1
+fi
+
+# Se ejecuta en primer plano para ver el progreso; el postinst lo lanza aparte.
+exec /usr/lib/copiex/instalar-dependencias "$MODO"

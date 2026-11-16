@@ -19,9 +19,9 @@ ICONO_RESERVA = "edit-copy"
 def icono_disponible(nombre: str) -> str:
     """Devuelve `nombre` si el tema de iconos lo tiene; si no, el de reserva.
 
-    Los iconos propios los instala ./install.sh en ~/.local/share/icons. Si la app
-    se ejecuta sin instalar, se usa el icono genérico del tema y no queda un
-    hueco vacío.
+    Los iconos propios los instala el paquete .deb en /usr/share/icons (antes
+    ./install.sh en ~/.local/share/icons). Si la app se ejecuta sin instalar, se
+    usa el icono genérico del tema y no queda un hueco vacío.
     """
     try:
         import gi

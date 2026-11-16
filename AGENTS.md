@@ -18,11 +18,11 @@ Los 12 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11)
 (muchos ficheros) está medido y mejorado, y «Cortar con Copiex» mueve de verdad desde el
 16/11. No hay trabajo pendiente.
 
-**Estado al 16/11/2026:** último commit `ee884ac` (ya incluye MTP, «Cortar» y el icono de
-bandeja a color). Sin commitear quedan `TODO.md`, `AGENTS.md`, `NOTES.md` y un cambio de
-`menu.yaml` (descripción más corta de «Acerca de»). La app quedó en la bandeja (el PID
-cambia) y Nautilus recargado. Falta solo la prueba del usuario con el menú real (cortar a
-una y a N carpetas) y confirmar el icono verde en el panel; no rehacer lo ya verificado.
+**Estado al 16/11/2026:** último commit `ff317f2` (MTP, «Cortar», icono a color, docs).
+Después se añadieron el paquete `.deb` en `packaging/`, `copiex_1.0.0_amd64.deb` y
+`upgrade.sh`; `install.sh` se retiró. Todo ello está sin commitear. La app **no está
+arrancada** al retomar: `./copiex-launcher --bandeja`. Historial real: 38 filas. «Cortar»
+está confirmado por el usuario; falta confirmar el icono verde en el panel.
 
 ## Reglas que no se negocian
 
@@ -30,7 +30,7 @@ una y a N carpetas) y confirmar el icono verde en el panel; no rehacer lo ya ver
   opciones y textos de ventanas emergentes. Se leen con `texto("seccion.clave")` de
   `copiex/menu.py`; si añades una clave, añádela también a `_POR_DEFECTO` en ese módulo. Un
   cambio en el YAML exige **reiniciar la app**; la extensión (fichero suelto) lleva su
-  propio lector de la sección `nautilus:` y exige `./install.sh` + `nautilus -q`.
+  propio lector de la sección `nautilus:` y exige instalar el `.deb` (`./upgrade.sh`) + `nautilus -q`.
 - **Si el menú de Nautilus no hace nada:** mira `~/.local/share/copiex/extension.log`
   (traza de copiar/pegar, MIME leído y respuesta de la app); los `print` de la
   extensión se pierden.
@@ -70,9 +70,10 @@ pasa cuando la aplicación no está arrancada. El envío sin hilos deja las etap
 ```bash
 ./copiex-launcher                      # abre la ventana
 ./copiex-launcher --bandeja            # solo bandeja (sin ventana)
-./install.sh && nautilus -q            # extensión, servicio D-Bus, iconos; luego recarga Nautilus
-./uninstall.sh --simular              # qué borraría (no toca nada)
-./uninstall.sh                        # desinstala todo (pregunta; --conservar-datos/--si)
+./upgrade.sh                          # actualiza deps, reconstruye el .deb y reinstala Copiex
+./packaging/build-deb.sh              # crea copiex_<versión>_<arq>.deb con deps offline
+./uninstall.sh --simular              # limpieza de una instalación antigua (simulación)
+./uninstall.sh                        # limpieza de usuario antigua (pregunta; --conservar-datos/--si)
 python3 -m py_compile copiex/*.py      # comprobación rápida
 ```
 
@@ -120,6 +121,16 @@ Lanzar la GUI desde un terminal sin bloquear:
   portapapeles con cabecera `copy`/`cut`, arranque y el ciclo de «Pegar con Copiex N
   destinos», clase `_SelectorDestinos`). Cortar añade `"move": true` al mensaje; el
   borrado de orígenes lo hace el motor al terminar. Las peticiones se envían **sin hilos**
-  (`_Envio`, callbacks de `GLib.io_add_watch`) y el arranque se pide por D-Bus al servicio
-  `com.copiex.Manager`, que instala `install.sh`
-  (`~/.local/share/dbus-1/services/com.copiex.Manager.service`).
+  (  `_Envio`, callbacks de `GLib.io_add_watch`) y el arranque se pide por D-Bus al servicio
+  `com.copiex.Manager`, que instala el paquete `.deb`
+  (`/usr/share/dbus-1/services/com.copiex.Manager.service`; las instalaciones antiguas
+  lo tenían en `~/.local/share/dbus-1/services`). En el `.deb` también busca `menu.yaml`
+  en `/opt/copiex` y `/usr/share/copiex`.
+- `packaging/`: `.deb` con la app en `/opt/copiex`, lanzador, escritorio, iconos,
+  servicio D-Bus, extensión de Nautilus y repositorio APT local con las dependencias.
+  El `postinst` solo depende de `python3`; un helper instala lo que falte en segundo
+  plano (repositorio local sin red, o actualización desde Internet si se acepta). No lo
+  conviertas en un paquete con `Depends:` de GTK: eso impediría la instalación offline.
+- `upgrade.sh`: actualiza listas y dependencias (directas y transitivas instaladas),
+  reconstruye el `.deb` con las versiones actuales y reinstala el paquete (aunque la
+  versión no cambie). No se ejecuta con sudo.

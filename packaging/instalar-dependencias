@@ -1,0 +1,96 @@
+#!/bin/sh
+# Instala las dependencias de Copiex.
+#
+# Uso:  instalar-dependencias [actualizar|local]
+#   actualizar: usa los repositorios de Ubuntu (requiere Internet).
+#   local:      usa el repositorio APT incluido en /usr/share/copiex/offline.
+#
+# Se ejecuta desde el postinst en segundo plano (dpkg aún tiene el candado) y
+# desde /usr/bin/copiex-dependencias a mano. Nunca interrumpe la instalación de
+# Copiex: si algo falla, lo deja anotado en el registro.
+set -u
+
+MODO=${1:-local}
+REGISTRO=/var/log/copiex-dependencias.log
+LISTA=/usr/share/copiex/paquetes.txt
+ESTADO=/var/lib/copiex/estado
+
+mkdir -p /var/lib/copiex /var/lib/copiex/lists
+exec >>"$REGISTRO" 2>&1
+echo
+echo "== $(date '+%Y-%m-%d %H:%M:%S') instalando dependencias (modo $MODO) =="
+
+export DEBIAN_FRONTEND=noninteractive
+export LC_ALL=C.UTF-8
+CANDADO="-o DPkg::Lock::Timeout=900"
+
+if [ ! -r "$LISTA" ]; then
+    echo "ERROR: falta $LISTA"
+    echo "error" >"$ESTADO"
+    exit 1
+fi
+PAQUETES=$(grep -v '^[[:space:]]*#' "$LISTA" | grep -v '^[[:space:]]*$' | tr '\n' ' ')
+
+fallan() {
+    echo "ERROR: no se pudieron instalar todas las dependencias."
+    echo "       Revisa este registro o ejecuta: sudo copiex-dependencias local"
+    echo "error" >"$ESTADO"
+    exit 1
+}
+
+# Solo se instalan los paquetes que falten: así una instalación offline no
+# baja de versión nada que ya estuviera más nuevo en el sistema.
+faltan() {
+    for paquete in $PAQUETES; do
+        estado=$(dpkg-query -W -f='${Status}' "$paquete" 2>/dev/null || true)
+        case "$estado" in
+            "install ok installed") ;;
+            *) printf '%s ' "$paquete" ;;
+        esac
+    done
+}
+
+instalar_local() {
+    echo "-- usando el repositorio incluido en /usr/share/copiex/offline"
+    FUENTE=/var/lib/copiex/copiex-offline.list
+    printf 'deb [trusted=yes] file:/usr/share/copiex/offline ./\n' >"$FUENTE"
+    OPCIONES="-o Dir::Etc::sourcelist=$FUENTE -o Dir::Etc::sourceparts=- \
+-o Dir::State::lists=/var/lib/copiex/lists -o APT::Get::List-Cleanup=0 \
+-o Acquire::Retries=0 -o APT::Get::AllowDowngrades=false"
+    # shellcheck disable=SC2086
+    apt-get $OPCIONES $CANDADO update || fallan
+    FALTAN=$(faltan)
+    if [ -z "$FALTAN" ]; then
+        echo "no falta ningún paquete"
+        rm -f "$FUENTE"
+        return 0
+    fi
+    echo "paquetes que faltan: $FALTAN"
+    # shellcheck disable=SC2086
+    apt-get $OPCIONES $CANDADO install -y --no-install-recommends $FALTAN || fallan
+    rm -f "$FUENTE"
+}
+
+instalar_online() {
+    echo "-- usando los repositorios de Ubuntu (Internet)"
+    apt-get $CANDADO update || return 1
+    # En línea sí se actualizan también los que ya estén instalados.
+    # shellcheck disable=SC2086
+    apt-get $CANDADO install -y --no-install-recommends $PAQUETES || return 1
+}
+
+case "$MODO" in
+    actualizar)
+        if ! instalar_online; then
+            echo "AVISO: falló la actualización por Internet; se usa el paquete local."
+            instalar_local
+        fi
+        ;;
+    *)
+        instalar_local
+        ;;
+esac
+
+echo "ok" >"$ESTADO"
+echo "== $(date '+%Y-%m-%d %H:%M:%S') dependencias listas =="
+exit 0

@@ -46,7 +46,14 @@ los orígenes al terminar, también con «Pegar con Copiex N destinos») y el ic
 la bandeja (la «C» blanca sobre verde). El detalle técnico, las pruebas y el estado exacto
 al cerrar la sesión están en `TODO.md`; las reglas de trabajo, en `AGENTS.md`.
 
-Queda solo la prueba del usuario desde el menú real de Nautilus (cortar a una y a varias
-carpetas) y confirmar que el icono del panel ya es el verde. El código del 16/11 está
-commiteado en `ee884ac`; sin commitear quedan la documentación actualizada y un cambio de
-`menu.yaml`. No se debe hacer commit ni push sin pedirlo.
+«Cortar con Copiex» ya está confirmado por el usuario. Queda solo confirmar que el icono
+del panel es el verde. Todo el trabajo del 16/11 (código, `menu.yaml` y documentación) está
+commiteado en `ff317f2`.
+
+Desde el 16/11 hay también un instalador `.deb` en la raíz del proyecto
+(`copiex_1.0.0_amd64.deb`, generado con `packaging/build-deb.sh`). Incluye las
+dependencias en un repositorio APT local para instalar sin Internet y, si hay red y
+terminal, pregunta si actualizarlas desde Ubuntu. `install.sh` ya no es necesario: el
+`.deb` instala la aplicación y `./upgrade.sh` actualiza las dependencias, reconstruye el
+paquete con las versiones actuales y reinstala Copiex. No se debe hacer commit ni push sin
+pedirlo.
