@@ -1144,6 +1144,12 @@ class Motor:
                 op._terminado.clear()
                 op._cancelado.clear()
                 op._corriendo.set()
+                # La operación viene del historial: hay que persistir también
+                # que la pausa manual ya se deshizo. Si no, un kill después de
+                # esta reanudación deja pausa_manual=1 en SQLite y el vigilante
+                # ya no la reanuda al volver a arrancar (sobre todo se notaba
+                # con las copias de varios destinos).
+                op._persistir_estado()
                 op.iniciar(reanudando=True)
                 op._aviso(force=True)
                 return True

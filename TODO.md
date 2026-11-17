@@ -20,6 +20,15 @@ se añadió además **«Cortar con Copiex»**: mueve de verdad (copia y borra lo
 terminar), también con «Pegar con Copiex N destinos». Los requerimientos de workers se
 retiraron del pliego el 13/11 y su código se eliminó (sección 3 quinquies).
 
+El 16/11 se completó además el **empaquetado `.deb`** con las dependencias offline, se
+retiró `install.sh`, se añadió `upgrade.sh` para actualizar dependencias y reconstruir el
+paquete, y todo se publicó en el commit **`ce8d9ee`** (secciones 3 undevicies y 3 vicies).
+
+El **17/11** se corrigió la reanudación automática de una copia a varios destinos que había
+sido reanudada manualmente y luego recibió un kill: `Motor.reanudar()` no persistía que la
+pausa manual ya estaba deshecha. El arreglo de `copiex/engine.py` se publicó en el commit
+de esta corrección (sección 3 unvicies).
+
 ---
 
 ## 1. Cómo retomar
@@ -32,17 +41,20 @@ Abre el proyecto en Freebuff y pega algo como:
 > `pkill -f`). Antes de tocar el motor o la extensión, lee 3 ter, 3 quindecies y
 > 3 septendecies: el 14/11 se corrigieron el destino borrado durante la pausa y el
 > arranque sin hilos por D-Bus, y el 16/11 se añadieron MTP, «Cortar con Copiex» y el
-> icono a color en la bandeja. No queda trabajo pendiente salvo tu prueba real del menú de
-> Nautilus y del icono (sección 4). No hagas commit ni push sin pedírmelo.
+> icono a color en la bandeja. El paquete `.deb`, `upgrade.sh`, la retirada de `install.sh`
+> y la publicación están en las secciones 3 undevicies y 3 vicies. No queda trabajo
+> pendiente salvo tu prueba real del menú de Nautilus y del icono (sección 4). No hagas
+> commit ni push sin pedírmelo.
 
 La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hechas.
 
 ### Estado actual al retomar (16/11/2026)
 
-- **Git:** último commit **`ff317f2`** «Implementamos: a) Cortar y pegar b) Cambiar el
-  icono de la esquina a color: verde», que ya incluye **todo** el código de MTP, «Cortar
-  con Copiex», icono de bandeja, `menu.yaml` y esta documentación. Después se añadieron el
-  empaquetado `.deb`, `upgrade.sh` y la retirada de `install.sh`, **sin commitear**.
+- **Git:** último commit **`ce8d9ee`** «Empaquetar Copiex como .deb y añadir upgrade.sh»,
+  ya publicado en `repo-copiex/main` (el anterior era `ff317f2`). Incluye el empaquetado
+  `.deb`, `upgrade.sh`, `.gitignore`, la retirada de `install.sh` y la documentación. El
+  17/11 se añadió y publicó el arreglo de reanudación de `copiex/engine.py` y esta
+  documentación. El `.deb` de 60 MB no se versiona.
 - **En marcha:** al retomar, la app **no está arrancada**; se levanta con
   `./copiex-launcher --bandeja` (o se activa sola desde Nautilus). Nautilus tiene la
   extensión instalada idéntica a la fuente.
@@ -54,9 +66,9 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
   `com.copiex.Manager` (color).
 - **Pendiente del usuario:** confirmar que en el panel ya se ve la «C» verde. Mover
   hacia/desde MTP y mover carpetas vacías quedan como mejoras opcionales.
-- **Paquete .deb:** `copiex_1.0.0_amd64.deb` (60 MB) en la raíz y el empaquetado en
-  `packaging/`; `upgrade.sh` actualiza deps, reconstruye el `.deb` y reinstala. Está sin
-  commitear. Detalles y límites en 3 undevicies.
+- **Paquete .deb:** `copiex_1.0.0_amd64.deb` (60 MB) en la raíz, ignorado por Git, y el
+  empaquetado en `packaging/` (sí versionado); `upgrade.sh` actualiza deps, reconstruye el
+  `.deb` y reinstala. Todo está en `ce8d9ee`. Detalles y límites en 3 undevicies y 3 vicies.
 - **Siguiente paso:** si no pide algo nuevo, no rehacer lo ya verificado ni hacer
   commit/push sin que lo pida.
 
@@ -817,13 +829,78 @@ En `packaging/` hay un empaquetado completo que genera
 Comprobado el 16/11: `dpkg-deb -I` (control, `Depends: python3`, 183 `.deb`),
 `apt-get -s install ./copiex_1.0.0_amd64.deb` (solo Copiex como paquete nuevo), la
 importación del código extraído y `menu.yaml` desde `/opt/copiex`, y una simulación de
-`apt-get update`/`install` contra el repositorio local. **No** se ha instalado de verdad
-(hace falta root) ni probado en una máquina sin las dependencias; la pregunta interactiva
-tampoco se ha podido ver con un `apt install` real.
+`apt-get update`/`install` contra el repositorio local. También se comprobó la sintaxis de
+`upgrade.sh`/`uninstall.sh`/`build-deb.sh`, la resolución de las 183 dependencias,
+`apt-get -s install --only-upgrade` y `--reinstall` del `.deb`, y se reconstruyó el paquete
+real (60 MB, sha256 `f26bf90e…`). **No** se ha instalado de verdad (hace falta root) ni
+probado en una máquina sin las dependencias; la pregunta interactiva tampoco se ha podido
+ver con un `apt install` real. `upgrade.sh` no se ha ejecutado de extremo a extremo porque
+actualiza paquetes del sistema y requiere root.
 
 Limitaciones: el repositorio es específico de la arquitectura y de la versión de Ubuntu
 con la que se construye; `menu.yaml` en `/opt` lo gestiona el paquete y una actualización
 puede reemplazarlo.
+
+## 3 vicies. `upgrade.sh`, `.gitignore` y publicación (16/11)
+
+Se retiró `install.sh`: el `.deb` es ahora la única instalación soportada. `uninstall.sh`
+se conserva para limpiar instalaciones antiguas de usuario; avisa si detecta el paquete
+`.deb` y recuerda que se quita con `sudo apt remove copiex`.
+
+**`upgrade.sh`** (raíz, ejecutable, sin `sudo`):
+
+1. `apt-get update` con `DEBIAN_FRONTEND=noninteractive`;
+2. resuelve el cierre de dependencias (`resolver.py`, 2 niveles por defecto) y ejecuta
+   `apt-get install --only-upgrade` sobre las ya instaladas; después instala/actualiza las
+   directas de `packaging/deps.txt`;
+3. ejecuta `packaging/build-deb.sh`, que descarga las versiones actuales de las 183
+   dependencias y reconstruye `copiex_1.0.0_amd64.deb`;
+4. instala el `.deb` con `--reinstall` si ya estaba instalado (la versión no cambia), con
+   `COPIEX_ACTUALIZAR=no` para que el `postinst` no vuelva a preguntar;
+5. avisa si Copiex está abierto y de que hay que reiniciar Nautilus (`nautilus -q`).
+
+Se creó **`.gitignore`** con `copiex_*.deb`, `packaging/build/` y `packaging/cache/`,
+para no versionar el binario de 60 MB ni las descargas temporales. Comprobado con
+`git check-ignore`.
+
+Publicación: commit **`ce8d9ee`** «Empaquetar Copiex como .deb y añadir upgrade.sh»,
+push correcto `ff317f2..ce8d9ee` a `repo-copiex/main`. Se comprobó la sintaxis de los
+scripts, la resolución de 183 paquetes, las simulaciones de `apt-get install
+--only-upgrade` y `--reinstall`, y la reconstrucción real del `.deb`. No se ejecutó
+`upgrade.sh` completo (root + cambios en el sistema) ni se probó la instalación real del
+`.deb`.
+
+## 3 unvicies. Reanudación de N destinos tras un kill (17/11)
+
+**Síntoma.** Una copia a un solo destino se reanudaba sola al volver a arrancar Copiex
+tras un kill; una copia a varios destinos no.
+
+**Causa.** Cuando una copia venía del historial (su hilo ya no existía), `Motor.reanudar()`
+entraba en la rama que arranca un hilo nuevo, pero **no llamaba a `_persistir_estado()`**.
+Si el usuario reanudaba manualmente esa copia y luego mataba Copiex, SQLite conservaba
+`pausa_manual=1` aunque la pausa ya se había deshecho. Al siguiente arranque el vigilante
+la ignoraba (`op.pausa_manual`), así que no se reanudaba; en el caso de un solo destino
+esa combinación no se había dado.
+
+**Arreglo** (`copiex/engine.py`, `Motor.reanudar`): antes de `op.iniciar(reanudando=True)`
+se llama a `op._persistir_estado()`, que guarda `estado=running`, `pausa_manual=0` y el
+estado de cada destino. Así un kill posterior deja el historial en un estado que el
+vigilante puede recuperar.
+
+**Comprobado** con base de datos y carpetas temporales (sin tocar el historial real):
+
+- Copia de 2 GB a **dos destinos**, pausa manual y `kill -9`.
+- Arranque nuevo: recuperada en `paused`, `pausa_manual=1`.
+- `Motor.reanudar()`: la fila pasa a `running` y `pausa_manual=0` inmediatamente.
+- Segundo `kill -9`; nuevo arranque: recuperada en `paused`, `pausa_manual=False`, dos
+destinos y `Vigilante._motivo_espera()` devuelve `''` (puede continuar).
+- `Motor.reanudar()` vuelve a arrancar la copia.
+- También se repitió el caso de kill directo (sin pausa manual) con dos destinos: sigue
+  reanudándose automáticamente y termina con los dos destinos en `done`.
+
+**Confirmado por el usuario** el 17/11 desde el flujo real de Nautilus: el pegado a varios
+destinos se reanuda automáticamente tras matar y volver a arrancar Copiex. Se publicó en
+el commit de esta corrección.
 
 ## 4. Pendientes, por orden sugerido
 
@@ -902,12 +979,11 @@ y mover hacia/desde MTP.
 
 Ubuntu 26.04 «resolute», GNOME 50.1, Nautilus 50.2.2, GTK 4.22.4, PyGObject 3.56.2,
 Wayland. El 16/11 había un Android montado por MTP (`gvfsd-mtp` y `gvfs-fuse` 1.60). El
-proyecto **es un repositorio git** (rama `main`; último commit **`ff317f2`** «Implementamos:
-a) Cortar y pegar b) Cambiar el icono de la esquina a color: verde»; remoto `repo-copiex`
-en GitHub). Ese commit guarda el trabajo del 13, 14 y 16/11: motor de varios destinos,
-MTP, «Cortar», icono de bandeja, extensión sin hilos, `install.sh`, `menu.yaml` y esta
-documentación. Después se añadieron el `.deb`, `upgrade.sh` y la retirada de `install.sh`,
-sin commitear.
+proyecto **es un repositorio git** (rama `main`; último commit **`ce8d9ee`** «Empaquetar
+Copiex como .deb y añadir upgrade.sh»; remoto `repo-copiex` en GitHub). Ese commit incluye
+el trabajo del 13, 14 y 16/11 (motor de varios destinos, MTP, «Cortar», icono de bandeja,
+extensión sin hilos, `menu.yaml`), el empaquetado `.deb`, `upgrade.sh`, `.gitignore` y la
+retirada de `install.sh`. El árbol está limpio y el `.deb` no se versiona.
 Historial real al retomar: **38 filas** y 13 filas en `destinos`. La app **no está en
 marcha**; se arranca con `./copiex-launcher --bandeja` (o la activa Nautilus) y el PID
 cambia, comprobar con `ps -eo pid,args | grep "[p]ython3 -m copiex"`. Nautilus está

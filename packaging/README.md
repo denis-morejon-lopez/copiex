@@ -1,6 +1,12 @@
 # Paquete .deb de Copiex
 
-Genera `copiex_<versión>_<arquitectura>.deb` en la raíz del proyecto.
+Genera `copiex_<versión>_<arquitectura>.deb` en la raíz del proyecto. El
+artefacto y las carpetas `build/` y `cache/` están en `.gitignore`: se publica
+el código del empaquetado, no el binario de 60 MB.
+
+Estado actual (16/11/2026): el paquete y `upgrade.sh` están publicados en el
+commit `ce8d9ee`; `install.sh` se retiró y `uninstall.sh` queda solo para
+instalaciones antiguas de usuario.
 
 ```bash
 ./packaging/build-deb.sh
@@ -72,7 +78,14 @@ Desde la raíz del proyecto, sin sudo:
 Actualiza las listas de Ubuntu, actualiza las dependencias directas y las
 transitivas ya instaladas, reconstruye el `.deb` con las versiones actuales de
 todas las dependencias y reinstala el paquete (incluido el caso en que la
-versión de Copiex no cambie).
+versión de Copiex no cambie). No se ejecuta con `sudo`: el script lo pide solo
+para `apt-get`.
+
+Comprobado en la sesión del 16/11: sintaxis de los scripts, resolución de las
+183 dependencias, simulaciones de `apt-get install --only-upgrade` y
+`--reinstall`, y reconstrucción real del `.deb`. No se ejecutó `upgrade.sh`
+completo (requiere root y modifica el sistema) ni se instaló el `.deb` en una
+máquina limpia; eso queda pendiente de la prueba del usuario.
 
 ## Limitaciones
 
@@ -82,3 +95,8 @@ versión de Copiex no cambie).
   mantiene el candado durante el `postinst`); por eso es en segundo plano.
 - `menu.yaml` instalado en `/opt` es gestionado por el paquete: una
   actualización puede reemplazarlo.
+- `upgrade.sh` necesita Internet para actualizar los paquetes y reconstruir el
+  `.deb`; sin red queda `sudo copiex-dependencias` para usar el repositorio
+  offline ya instalado.
+- La versión del paquete sigue siendo `1.0.0`; `upgrade.sh` usa `--reinstall`
+  para aplicar cambios aunque no se haya incrementado.

@@ -47,13 +47,17 @@ la bandeja (la «C» blanca sobre verde). El detalle técnico, las pruebas y el 
 al cerrar la sesión están en `TODO.md`; las reglas de trabajo, en `AGENTS.md`.
 
 «Cortar con Copiex» ya está confirmado por el usuario. Queda solo confirmar que el icono
-del panel es el verde. Todo el trabajo del 16/11 (código, `menu.yaml` y documentación) está
-commiteado en `ff317f2`.
+del panel es el verde. El código, `menu.yaml` y la documentación se commitearon primero en
+`ff317f2`; el empaquetado, `upgrade.sh`, `.gitignore` y la retirada de `install.sh` se
+publicaron después en **`ce8d9ee`** (`repo-copiex/main`). El 17/11 se corrigió la
+reanudación automática de copias recuperadas a varios destinos tras un kill; el arreglo de
+`copiex/engine.py` y la documentación se publicaron en el commit de esta corrección.
 
-Desde el 16/11 hay también un instalador `.deb` en la raíz del proyecto
+Desde el 16/11 hay un instalador `.deb` en la raíz del proyecto
 (`copiex_1.0.0_amd64.deb`, generado con `packaging/build-deb.sh`). Incluye las
 dependencias en un repositorio APT local para instalar sin Internet y, si hay red y
-terminal, pregunta si actualizarlas desde Ubuntu. `install.sh` ya no es necesario: el
-`.deb` instala la aplicación y `./upgrade.sh` actualiza las dependencias, reconstruye el
-paquete con las versiones actuales y reinstala Copiex. No se debe hacer commit ni push sin
-pedirlo.
+terminal, pregunta si actualizarlas desde Ubuntu. `install.sh` ya no existe: el `.deb`
+instala la aplicación y `./upgrade.sh` actualiza las dependencias (directas y transitivas
+instaladas), reconstruye el paquete con las versiones actuales y reinstala Copiex. El
+`.deb` y las carpetas de construcción están en `.gitignore` y no se versionan. No se debe
+hacer commit ni push sin pedirlo.

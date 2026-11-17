@@ -16,11 +16,17 @@ los de workers se retiraron el 13/11 y el 12, MTP, se añadió el 16/11).
 
 Los 12 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11), el error 3
 (muchos ficheros) está medido y mejorado, y «Cortar con Copiex» mueve de verdad desde el
-16/11. No hay trabajo pendiente.
+16/11. El empaquetado `.deb` y `upgrade.sh` están terminados, publicados y documentados en
+`TODO.md` (3 undevicies y 3 vicies). No hay trabajo pendiente del pliego.
 
-**Estado al 16/11/2026:** último commit `ff317f2` (MTP, «Cortar», icono a color, docs).
-Después se añadieron el paquete `.deb` en `packaging/`, `copiex_1.0.0_amd64.deb` y
-`upgrade.sh`; `install.sh` se retiró. Todo ello está sin commitear. La app **no está
+**Estado al 16/11/2026:** último commit **`ce8d9ee`** «Empaquetar Copiex como .deb y
+añadir upgrade.sh», ya publicado en `repo-copiex/main`. Incluye el paquete `.deb` en
+`packaging/`, `upgrade.sh`, `.gitignore` y la retirada de `install.sh`. El `.deb`
+(`copiex_1.0.0_amd64.deb`, 60 MB) está ignorado por Git. El 17/11 se corrigió en
+`copiex/engine.py` la persistencia de `pausa_manual` al reanudar una copia recuperada; ese
+arreglo y la documentación se publicaron en el commit de esta corrección. El usuario
+confirmó el 17/11 que la reanudación automática a varios destinos ya funciona desde el
+flujo real. La app **no está
 arrancada** al retomar: `./copiex-launcher --bandeja`. Historial real: 38 filas. «Cortar»
 está confirmado por el usuario; falta confirmar el icono verde en el panel.
 
@@ -72,6 +78,7 @@ pasa cuando la aplicación no está arrancada. El envío sin hilos deja las etap
 ./copiex-launcher --bandeja            # solo bandeja (sin ventana)
 ./upgrade.sh                          # actualiza deps, reconstruye el .deb y reinstala Copiex
 ./packaging/build-deb.sh              # crea copiex_<versión>_<arq>.deb con deps offline
+sudo apt remove copiex                 # desinstala el paquete .deb
 ./uninstall.sh --simular              # limpieza de una instalación antigua (simulación)
 ./uninstall.sh                        # limpieza de usuario antigua (pregunta; --conservar-datos/--si)
 python3 -m py_compile copiex/*.py      # comprobación rápida
@@ -134,3 +141,6 @@ Lanzar la GUI desde un terminal sin bloquear:
 - `upgrade.sh`: actualiza listas y dependencias (directas y transitivas instaladas),
   reconstruye el `.deb` con las versiones actuales y reinstala el paquete (aunque la
   versión no cambie). No se ejecuta con sudo.
+- **Reanudar tras kill:** `Motor.reanudar()` debe persistir el estado también cuando la
+  operación viene del historial (hilo nuevo); si no, `pausa_manual=1` sobrevive y el
+  vigilante no la recupera. Ver «3 unvicies» en `TODO.md`.
