@@ -20,14 +20,14 @@ mejorado, y «Cortar con Copiex» mueve de verdad desde el 16/11. El empaquetado
 `upgrade.sh` están terminados, publicados y documentados en `TODO.md` (3 undevicies y
 3 vicies). El selector de idioma está en la sección 3 duovicies.
 
-**Estado al 17/11/2026:** último commit **`09fb53f`** «Persistir estado al reanudar copias
-recuperadas», ya publicado en `repo-copiex/main`. El 17/11 se añadió el **selector de
-idioma español/inglés** en el menú del Centinela y de la ventana; la preferencia se guarda
-en `~/.config/copiex/language` y la extensión de Nautilus la lee sin reiniciar. Ese cambio
-y esta documentación están **sin commitear**. El `.deb` (`copiex_1.0.0_amd64.deb`, 60 MB)
-está ignorado por Git. La app **no está arrancada** al retomar: `./copiex-launcher
---bandeja`. Historial real: 38 filas. «Cortar» está confirmado por el usuario; falta
-confirmar el icono verde en el panel y probar el selector en el menú real.
+**Estado al 17/11/2026:** el **selector de idioma español/inglés** se publicó en
+**`fc04da6`** «Idioma inglés» (`repo-copiex/main`). Después se añadió el aviso a Nautilus
+(`Gio.FileMonitor` sobre `~/.config/copiex` + `emit_items_updated_signal()`) para que
+rehaga sus ítems al cambiar el idioma: va en el commit de esta corrección, junto con esta
+documentación (local, **sin push**). El `.deb` (`copiex_1.0.0_amd64.deb`, 60 MB) está
+ignorado por Git. La app **no está arrancada** al retomar: `./copiex-launcher --bandeja`.
+Historial real: 43 filas y 21 en `destinos`. «Cortar» y el cambio de idioma en el menú real
+de Nautilus están confirmados por el usuario; falta confirmar el icono verde en el panel.
 
 ## Reglas que no se negocian
 
@@ -38,8 +38,19 @@ confirmar el icono verde en el panel y probar el selector en el menú real.
   **reiniciar la app**; la extensión (fichero suelto) lleva su propio lector de la sección
   `nautilus:` y de `en.nautilus:` y exige instalar el `.deb` (`./upgrade.sh`) + `nautilus -q`.
 - **Idioma:** el selector guarda `es`/`en` en `~/.config/copiex/language`; la extensión lee
-  ese fichero al construir el menú, así que las etiquetas de Nautilus cambian sin reiniciar.
-  No dupliques textos en el código: usa `texto()`/`formato()` y el YAML.
+  ese fichero al construir el menú y, como Nautilus solo pide los ítems al cambiar la
+  selección o la vista, vigila esa carpeta con un `Gio.FileMonitor` y emite
+  `emit_items_updated_signal()` para que los vuelva a pedir. Las etiquetas cambian en la
+  siguiente apertura del menú, sin reiniciar Nautilus. No dupliques textos en el código:
+  usa `texto()`/`formato()` y el YAML.
+- **Nautilus carga la copia instalada, no el fichero del repo.** En este equipo (sin `.deb`)
+  es `~/.local/share/nautilus-python/extensions/copiex.py`; con el `.deb`,
+  `/usr/share/nautilus-python/extensions/copiex.py`. Si editas
+  `copiex/nautilus_extension.py` y no actualizas esa copia, Nautilus sigue con la versión
+  vieja y parece que el arreglo no funciona (pasó el 17/11 con el aviso de idioma):
+  `cp copiex/nautilus_extension.py ~/.local/share/nautilus-python/extensions/copiex.py`,
+  `nautilus -q` y comprueba con `md5sum` que coinciden. Basta borrar el `__pycache__`
+  antiguo de esa carpeta si el módulo compilado es más nuevo.
 - **Si el menú de Nautilus no hace nada:** mira `~/.local/share/copiex/extension.log`
   (traza de copiar/pegar, MIME leído y respuesta de la app); los `print` de la
   extensión se pierden.
@@ -103,7 +114,7 @@ Lanzar la GUI desde un terminal sin bloquear:
 - `menu.yaml` + `copiex/menu.py`: todos los textos de menús y ventanas emergentes en
   español (raíz) e inglés (`en:`), lector YAML propio con caché, reserva y preferencia en
   `~/.config/copiex/language`. Cambiar el YAML exige reiniciar la app; cambiar de idioma
-  desde el menú es inmediato.
+  desde el menú es inmediato en Copiex y en la siguiente apertura del menú de Nautilus.
 - `sounds/`: audio de la alarma (`copy-finished.*` manda) y `README.md` con las reglas;
   `copiex/sound.py` lo reproduce. Cambiar el sonido no exige reiniciar.
 - `icons/`: icono propio a color (la «C» blanca sobre verde, que es el que usa también
@@ -140,7 +151,9 @@ Lanzar la GUI desde un terminal sin bloquear:
   `com.copiex.Manager`, que instala el paquete `.deb`
   (`/usr/share/dbus-1/services/com.copiex.Manager.service`; las instalaciones antiguas
   lo tenían en `~/.local/share/dbus-1/services`). En el `.deb` también busca `menu.yaml`
-  en `/opt/copiex` y `/usr/share/copiex`.
+  en `/opt/copiex` y `/usr/share/copiex`. Lee el idioma y `menu.yaml` en cada construcción
+  del menú y vigila `~/.config/copiex` con `Gio.FileMonitor` para pedir a Nautilus
+  (`emit_items_updated_signal()`) que rehaga los ítems al cambiar de idioma.
 - `packaging/`: `.deb` con la app en `/opt/copiex`, lanzador, escritorio, iconos,
   servicio D-Bus, extensión de Nautilus y repositorio APT local con las dependencias.
   El `postinst` solo depende de `python3`; un helper instala lo que falte en segundo

@@ -46,16 +46,18 @@ requerimiento 12 (copiar hacia/desde `mtp://`), «Cortar con Copiex» (mueve: co
 los orígenes al terminar, también con «Pegar con Copiex N destinos») y el icono a color en
 la bandeja (la «C» blanca sobre verde). El 17/11 se añadió el requerimiento 13: selector de
 idioma español/inglés en el menú del Centinela y de la ventana, con preferencia guardada en
-`~/.config/copiex/language` y etiquetas de Nautilus que cambian sin reiniciar. El detalle
-técnico, las pruebas y el estado exacto al cerrar la sesión están en `TODO.md`; las reglas
-de trabajo, en `AGENTS.md`.
+`~/.config/copiex/language` y etiquetas de Nautilus que cambian sin reiniciar (al abrir el
+menú de nuevo). El detalle técnico, las pruebas y el estado exacto al cerrar la sesión
+están en `TODO.md`; las reglas de trabajo, en `AGENTS.md`.
 
-«Cortar con Copiex» ya está confirmado por el usuario. Queda solo confirmar que el icono
-del panel es el verde. El código, `menu.yaml` y la documentación se commitearon primero en
-`ff317f2`; el empaquetado, `upgrade.sh`, `.gitignore` y la retirada de `install.sh` se
-publicaron después en **`ce8d9ee`** (`repo-copiex/main`). El 17/11 se publicó en
-**`09fb53f`** el arreglo de reanudación de copias recuperadas a varios destinos tras un
-kill; el selector de idioma y esta documentación están sin commitear.
+«Cortar con Copiex» y el cambio de idioma en el menú real de Nautilus están confirmados por
+el usuario (17/11). Queda solo confirmar que el icono del panel es el verde. El código,
+`menu.yaml` y la documentación se commitearon primero en `ff317f2`; el empaquetado,
+`upgrade.sh`, `.gitignore` y la retirada de `install.sh` se publicaron después en
+**`ce8d9ee`** (`repo-copiex/main`). El 17/11 se publicó en **`09fb53f`** el arreglo de
+reanudación de copias recuperadas y, después, en **`fc04da6`** «Idioma inglés», el selector
+de idioma. El aviso a Nautilus (`emit_items_updated_signal()` al cambiar de idioma) y esta
+documentación van en el commit de esa corrección, pendiente de push.
 
 Desde el 16/11 hay un instalador `.deb` en la raíz del proyecto
 (`copiex_1.0.0_amd64.deb`, generado con `packaging/build-deb.sh`). Incluye las

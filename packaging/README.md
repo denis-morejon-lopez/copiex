@@ -4,9 +4,10 @@ Genera `copiex_<versión>_<arquitectura>.deb` en la raíz del proyecto. El
 artefacto y las carpetas `build/` y `cache/` están en `.gitignore`: se publica
 el código del empaquetado, no el binario de 60 MB.
 
-Estado actual (16/11/2026): el paquete y `upgrade.sh` están publicados en el
+Estado actual (17/11/2026): el paquete y `upgrade.sh` están publicados en el
 commit `ce8d9ee`; `install.sh` se retiró y `uninstall.sh` queda solo para
-instalaciones antiguas de usuario.
+instalaciones antiguas de usuario. El 17/11 se publicó en `fc04da6` «Idioma
+inglés» el selector de idioma; el paquete ya incluye `menu.yaml` bilingüe.
 
 ```bash
 ./packaging/build-deb.sh
@@ -68,6 +69,13 @@ El paquete incluye la extensión de Nautilus para todos los usuarios y, al
 instalarse, aparta una posible copia de `~/.local/share/nautilus-python/extensions/copiex.py`
 (la de instalaciones antiguas con `install.sh`) para que no aparezcan menús
 duplicados. Después hay que reiniciar Nautilus: `nautilus -q`.
+
+Mientras el `.deb` no esté instalado, la extensión que carga Nautilus es esa copia
+de usuario: tras tocar `copiex/nautilus_extension.py` hay que copiarla a mano
+(`cp copiex/nautilus_extension.py ~/.local/share/nautilus-python/extensions/copiex.py`),
+borrar el `__pycache__` de esa carpeta y reiniciar Nautilus. Comprueba con `md5sum`
+que ambos ficheros coinciden; una copia vieja fue la causa de que el cambio de
+idioma pareciera no aplicarse el 17/11.
 
 ## Actualizar Copiex y el paquete
 

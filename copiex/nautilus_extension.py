@@ -198,14 +198,19 @@ _TEXTO_DEFECTO_EN = {
 }
 
 
+def _carpeta_config() -> str:
+    """Carpeta de configuración de Copiex (donde vive el fichero `language`)."""
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return os.path.join(base, "copiex")
+
+
 def _idioma_actual() -> str:
     """Idioma elegido por la aplicación (`es` o `en`)."""
     elegido = os.environ.get("COPIEX_LANGUAGE", "").strip().lower()
     if elegido in ("es", "en"):
         return elegido
-    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
     try:
-        with open(os.path.join(base, "copiex", "language"), encoding="utf-8") as f:
+        with open(os.path.join(_carpeta_config(), "language"), encoding="utf-8") as f:
             elegido = f.read().strip().lower()
     except OSError:
         return "es"
@@ -292,6 +297,45 @@ def _texto(clave: str, **valores) -> str:
         return valor.format(**valores)
     except (KeyError, ValueError, IndexError):
         return valor
+
+
+def _vigilar_idioma(proveedor) -> "Gio.FileMonitor | None":
+    """Pide a Nautilus que rehaga el menú cuando cambie el idioma elegido.
+
+    Nautilus pide los ítems a las extensiones cuando cambia la selección o la
+    vista, no cada vez que se abre el menú. Por eso, leer el fichero de idioma
+    al construir los textos no basta: hace falta avisar con «items-updated»
+    para que vuelva a pedirlos. El cambio se ve en la siguiente apertura del
+    menú contextual (el que esté abierto en ese momento no se reconstruye,
+    porque Nautilus no expone API para eso), pero sin reiniciar el gestor.
+    """
+    carpeta = _carpeta_config()
+    try:
+        os.makedirs(carpeta, exist_ok=True)
+        monitor = Gio.File.new_for_path(carpeta).monitor_directory(
+            Gio.FileMonitorFlags.NONE, None
+        )
+    except Exception as exc:
+        _traza(f"no se pudo vigilar el fichero de idioma: {exc}")
+        return None
+    monitor.connect("changed", _al_cambiar_idioma, proveedor)
+    return monitor
+
+
+def _al_cambiar_idioma(_monitor, fichero, _otro, _evento, proveedor):
+    """Emite «items-updated» solo cuando el idioma guardado cambia de verdad."""
+    if fichero is None or fichero.get_basename() != "language":
+        return
+    idioma = _idioma_actual()
+    if idioma == proveedor._idioma_menu:
+        return
+    proveedor._idioma_menu = idioma
+    _traza(f"idioma cambiado a {idioma}: se pide a Nautilus que rehaga el menú")
+    try:
+        proveedor.emit_items_updated_signal()
+    except Exception as exc:
+        _traza(f"no se pudo avisar a Nautilus del cambio de idioma: {exc}")
+
 
 # Copiex arranca desde Nautilus con la salida descartada: los `print` de la
 # extensión no llegan a ningún sitio, así que lo que importa se anota aquí.
@@ -1039,6 +1083,13 @@ def _al_pegar_varios(destino: str):
 # proveedor de menús de Nautilus
 # ----------------------------------------------------------------------
 class ExtencionCopiex(GObject.GObject, Nautilus.MenuProvider):
+    def __init__(self):
+        super().__init__()
+        self._idioma_menu = _idioma_actual()
+        # El monitor se guarda en el objeto para que siga vivo mientras
+        # Nautilus tenga cargada la extensión.
+        self._monitor_idioma = _vigilar_idioma(self)
+
     def get_file_items(self, files):
         uris = [f.get_uri() for f in files if f is not None and f.get_uri()]
         if not uris:
