@@ -9,34 +9,37 @@ nombres en inglés** (`sound.py`, `watcher.py`, `nautilus_extension.py`, `copiex
 (`Vigilante`, `cargar()`, `texto()`).
 
 **Antes de tocar nada, lee `TODO.md`** (estado real, requerimiento por requerimiento,
-trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 12 requerimientos y 4 errores;
+trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 13 requerimientos y 4 errores;
 los de workers se retiraron el 13/11 y el 12, MTP, se añadió el 16/11).
 
 ## Trabajo pendiente
 
-Los 12 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11), el error 3
-(muchos ficheros) está medido y mejorado, y «Cortar con Copiex» mueve de verdad desde el
-16/11. El empaquetado `.deb` y `upgrade.sh` están terminados, publicados y documentados en
-`TODO.md` (3 undevicies y 3 vicies). No hay trabajo pendiente del pliego.
+Los 13 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11, y el 13 es
+el selector de idioma, añadido el 17/11), el error 3 (muchos ficheros) está medido y
+mejorado, y «Cortar con Copiex» mueve de verdad desde el 16/11. El empaquetado `.deb` y
+`upgrade.sh` están terminados, publicados y documentados en `TODO.md` (3 undevicies y
+3 vicies). El selector de idioma está en la sección 3 duovicies.
 
-**Estado al 16/11/2026:** último commit **`ce8d9ee`** «Empaquetar Copiex como .deb y
-añadir upgrade.sh», ya publicado en `repo-copiex/main`. Incluye el paquete `.deb` en
-`packaging/`, `upgrade.sh`, `.gitignore` y la retirada de `install.sh`. El `.deb`
-(`copiex_1.0.0_amd64.deb`, 60 MB) está ignorado por Git. El 17/11 se corrigió en
-`copiex/engine.py` la persistencia de `pausa_manual` al reanudar una copia recuperada; ese
-arreglo y la documentación se publicaron en el commit de esta corrección. El usuario
-confirmó el 17/11 que la reanudación automática a varios destinos ya funciona desde el
-flujo real. La app **no está
-arrancada** al retomar: `./copiex-launcher --bandeja`. Historial real: 38 filas. «Cortar»
-está confirmado por el usuario; falta confirmar el icono verde en el panel.
+**Estado al 17/11/2026:** último commit **`09fb53f`** «Persistir estado al reanudar copias
+recuperadas», ya publicado en `repo-copiex/main`. El 17/11 se añadió el **selector de
+idioma español/inglés** en el menú del Centinela y de la ventana; la preferencia se guarda
+en `~/.config/copiex/language` y la extensión de Nautilus la lee sin reiniciar. Ese cambio
+y esta documentación están **sin commitear**. El `.deb` (`copiex_1.0.0_amd64.deb`, 60 MB)
+está ignorado por Git. La app **no está arrancada** al retomar: `./copiex-launcher
+--bandeja`. Historial real: 38 filas. «Cortar» está confirmado por el usuario; falta
+confirmar el icono verde en el panel y probar el selector en el menú real.
 
 ## Reglas que no se negocian
 
 - **Los textos de la interfaz viven en `menu.yaml`** (raíz), no en el código: nombres de
   opciones y textos de ventanas emergentes. Se leen con `texto("seccion.clave")` de
-  `copiex/menu.py`; si añades una clave, añádela también a `_POR_DEFECTO` en ese módulo. Un
-  cambio en el YAML exige **reiniciar la app**; la extensión (fichero suelto) lleva su
-  propio lector de la sección `nautilus:` y exige instalar el `.deb` (`./upgrade.sh`) + `nautilus -q`.
+  `copiex/menu.py`; si añades una clave, añádela también a `_POR_DEFECTO` y
+  `_POR_DEFECTO_EN` en ese módulo y a las dos secciones del YAML. Un cambio en el YAML exige
+  **reiniciar la app**; la extensión (fichero suelto) lleva su propio lector de la sección
+  `nautilus:` y de `en.nautilus:` y exige instalar el `.deb` (`./upgrade.sh`) + `nautilus -q`.
+- **Idioma:** el selector guarda `es`/`en` en `~/.config/copiex/language`; la extensión lee
+  ese fichero al construir el menú, así que las etiquetas de Nautilus cambian sin reiniciar.
+  No dupliques textos en el código: usa `texto()`/`formato()` y el YAML.
 - **Si el menú de Nautilus no hace nada:** mira `~/.local/share/copiex/extension.log`
   (traza de copiar/pegar, MIME leído y respuesta de la app); los `print` de la
   extensión se pierden.
@@ -97,8 +100,10 @@ Lanzar la GUI desde un terminal sin bloquear:
 
 ## Mapa rápido
 
-- `menu.yaml` + `copiex/menu.py`: todos los textos de menús y ventanas emergentes (lector
-  YAML propio con caché y reserva). Cambiar el YAML exige reiniciar la app.
+- `menu.yaml` + `copiex/menu.py`: todos los textos de menús y ventanas emergentes en
+  español (raíz) e inglés (`en:`), lector YAML propio con caché, reserva y preferencia en
+  `~/.config/copiex/language`. Cambiar el YAML exige reiniciar la app; cambiar de idioma
+  desde el menú es inmediato.
 - `sounds/`: audio de la alarma (`copy-finished.*` manda) y `README.md` con las reglas;
   `copiex/sound.py` lo reproduce. Cambiar el sonido no exige reiniciar.
 - `icons/`: icono propio a color (la «C» blanca sobre verde, que es el que usa también
@@ -118,12 +123,15 @@ Lanzar la GUI desde un terminal sin bloquear:
   todos los destinos están `done`; la marca se guarda en la columna `mover`.
 - `copiex/store.py`: historial SQLite, incluida la tabla `destinos` con la cola de cada
   carpeta destino. `copiex/watcher.py`: reanudación automática cada 6 s.
-- `copiex/app.py` + `copiex/window.py`: aplicación y ventana del historial.
+- `copiex/app.py` + `copiex/window.py`: aplicación y ventana del historial; acciones
+  `idioma_es`/`idioma_en` y submenú «Idioma» en la ventana. Al cambiar de idioma se
+  reconstruye la ventana visible y se refresca el menú del Centinela.
 - `copiex/sound.py`: alerta de fin de copia. El audio está en `sounds/` (manda
   `copy-finished.*`; si no, el primer audio de la carpeta): para cambiar la alarma se
   sustituye ese fichero, no el código. «Eliminar» solo oculta la fila, nunca borra el
   historial.
-- `copiex/tray.py`: icono de bandeja (StatusNotifierItem). `copiex/ipc.py`: socket Unix.
+- `copiex/tray.py`: icono de bandeja (StatusNotifierItem) con submenú de idioma.
+  `copiex/ipc.py`: socket Unix.
 - `copiex/nautilus_extension.py`: extensión de Nautilus (menú con «Copiar» y «Cortar»,
   portapapeles con cabecera `copy`/`cut`, arranque y el ciclo de «Pegar con Copiex N
   destinos», clase `_SelectorDestinos`). Cortar añade `"move": true` al mensaje; el

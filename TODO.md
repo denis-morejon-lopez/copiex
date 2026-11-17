@@ -1,6 +1,6 @@
 # Copiex — punto de retorno
 
-Estado del trabajo al **16 de noviembre de 2026**: el 14/11 quedaron instalados el arreglo
+Estado del trabajo al **17 de noviembre de 2026**: el 14/11 quedaron instalados el arreglo
 del destino borrado durante una pausa y el arranque de Copiex desde Nautilus (envío sin
 hilos y activación por D-Bus); el 16/11 se añadieron el **requerimiento 12 (MTP)**,
 probado con un Android real en ambos sentidos, **«Cortar con Copiex»** (mover de verdad) y
@@ -8,11 +8,11 @@ el **icono a color en la bandeja** (la «C» blanca sobre verde). Este fichero y
 son todo lo que necesita una sesión nueva: el asistente no conserva memoria entre chats, y
 este resumen evita tener que releer el historial de la conversación anterior.
 
-**Resumen en una línea:** Copiex está terminado: los 12 requerimientos del pliego y los 4
+**Resumen en una línea:** Copiex está terminado: los 13 requerimientos del pliego y los 4
 errores están resueltos (bandeja, extensión de Nautilus, historial SQLite con reanudación
 automática, `menu.yaml` con todos los textos, «Acerca de», alerta sonora propia con botón
 «Eliminar», icono propio, copia optimizada con `copy_file_range`, varios destinos con una
-sola lectura y copia hacia/desde MTP). El 14/11 se corrigieron los dos fallos de la prueba
+sola lectura, copia hacia/desde MTP y selector de idioma español/inglés). El 14/11 se corrigieron los dos fallos de la prueba
 real: un destino cuyo fichero se borra durante la pausa no infla el progreso y se
 reintenta solo; y la extensión ya no envía desde un hilo ni lanza Copiex con `fork` desde
 Nautilus (lo arranca el bus de sesión), así que la petición sale en milisegundos. El 16/11
@@ -29,32 +29,36 @@ sido reanudada manualmente y luego recibió un kill: `Motor.reanudar()` no persi
 pausa manual ya estaba deshecha. El arreglo de `copiex/engine.py` se publicó en el commit
 de esta corrección (sección 3 unvicies).
 
+También el **17/11** se añadió el **selector de idioma español/inglés** en el menú del
+Centinela y en el de la ventana. La preferencia se guarda en
+`~/.config/copiex/language`; la extensión de Nautilus la lee al construir el menú, así que
+sus entradas cambian sin reiniciar Nautilus. Los textos viven en `menu.yaml` (sección
+3 duovicies).
+
 ---
 
 ## 1. Cómo retomar
 
 Abre el proyecto en Freebuff y pega algo como:
 
-> Lee `TODO.md` y `NOTES.md`. Los 12 requerimientos y los 4 errores del pliego ya están
+> Lee `TODO.md` y `NOTES.md`. Los 13 requerimientos y los 4 errores del pliego ya están
 > cerrados: no rehagas lo ya verificado y, si hay algo nuevo, sigue las reglas de
 > `AGENTS.md` (textos en `menu.yaml`, nombres de fichero en inglés, sin workers, sin
 > `pkill -f`). Antes de tocar el motor o la extensión, lee 3 ter, 3 quindecies y
 > 3 septendecies: el 14/11 se corrigieron el destino borrado durante la pausa y el
 > arranque sin hilos por D-Bus, y el 16/11 se añadieron MTP, «Cortar con Copiex» y el
 > icono a color en la bandeja. El paquete `.deb`, `upgrade.sh`, la retirada de `install.sh`
-> y la publicación están en las secciones 3 undevicies y 3 vicies. No queda trabajo
-> pendiente salvo tu prueba real del menú de Nautilus y del icono (sección 4). No hagas
-> commit ni push sin pedírmelo.
+> y la publicación están en las secciones 3 undevicies y 3 vicies. El selector de idioma
+> está en la sección 3 duovicies. No queda trabajo pendiente salvo tu prueba real del menú
+> de Nautilus, del icono y del selector (sección 4). No hagas commit ni push sin pedírmelo.
 
 La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hechas.
 
-### Estado actual al retomar (16/11/2026)
+### Estado actual al retomar (17/11/2026)
 
-- **Git:** último commit **`ce8d9ee`** «Empaquetar Copiex como .deb y añadir upgrade.sh»,
-  ya publicado en `repo-copiex/main` (el anterior era `ff317f2`). Incluye el empaquetado
-  `.deb`, `upgrade.sh`, `.gitignore`, la retirada de `install.sh` y la documentación. El
-  17/11 se añadió y publicó el arreglo de reanudación de `copiex/engine.py` y esta
-  documentación. El `.deb` de 60 MB no se versiona.
+- **Git:** último commit **`09fb53f`** «Persistir estado al reanudar copias recuperadas»,
+  ya publicado en `repo-copiex/main` (antes, `ce8d9ee`). El selector de idioma y esta
+  documentación están **sin commitear**. El `.deb` de 60 MB no se versiona.
 - **En marcha:** al retomar, la app **no está arrancada**; se levanta con
   `./copiex-launcher --bandeja` (o se activa sola desde Nautilus). Nautilus tiene la
   extensión instalada idéntica a la fuente.
@@ -63,9 +67,14 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
   en las pruebas (se usaron BD en `/tmp`).
 - **Cerrado y probado:** MTP en ambos sentidos; «Cortar» a uno y a N destinos (motor, IPC y
   extensión), confirmado por el usuario; el icono de la bandeja anuncia
-  `com.copiex.Manager` (color).
-- **Pendiente del usuario:** confirmar que en el panel ya se ve la «C» verde. Mover
-  hacia/desde MTP y mover carpetas vacías quedan como mejoras opcionales.
+  `com.copiex.Manager` (color). El selector de idioma cambia la ventana, el menú del
+  Centinela y las etiquetas de Nautilus.
+- **Idioma:** español por defecto; la elección se guarda en `~/.config/copiex/language`
+  (`COPIEX_LANGUAGE` permite forzarlo en pruebas). No hay que reiniciar Nautilus para que
+  cambien «Copiar/Cortar/Pegar con Copiex».
+- **Pendiente del usuario:** confirmar que en el panel ya se ve la «C» verde y probar el
+  selector desde el menú real. Mover hacia/desde MTP y mover carpetas vacías quedan como
+  mejoras opcionales.
 - **Paquete .deb:** `copiex_1.0.0_amd64.deb` (60 MB) en la raíz, ignorado por Git, y el
   empaquetado en `packaging/` (sí versionado); `upgrade.sh` actualiza deps, reconstruye el
   `.deb` y reinstala. Todo está en `ce8d9ee`. Detalles y límites en 3 undevicies y 3 vicies.
@@ -118,17 +127,17 @@ real de arranque con la app cerrada desde el menú; sí en banco, por D-Bus (0,4
 | `copiex/engine.py` | 1183 | `Operacion` (hilo de copia, pausa, aviso, velocidad, persistencia), `DestinoCopia` (estado por destino) y `Motor` (crear, pausar, reanudar, cancelar, historial). Bloques de 1 MiB; un solo destino con `os.copy_file_range` (reserva a lectura/escritura) y varios con `_copiar_a_varios()` (una lectura, escritura a todos); un `stat` por fichero y carpetas memorizadas; `_copiar_fichero()` reanuda por byte; `_pares()` calcula origen→destino. `_intacto()`/`_destino_cambio()` detectan un destino borrado o truncado; `_ejecutar_plan()` y hasta 3 pasadas en `_trabajar_seguro()` reintentan esos destinos; el `finally` de `_trabajar` no deja ninguno en `running`. Con MTP (`es_mtp`) no usa `copy_file_range` y rehace el fichero en vez de continuarlo por byte, descontando del progreso el parcial anterior. `Operacion.mover` (un «cortar») borra los orígenes en `_borrar_origenes()` solo con todos los destinos en `done`; la marca se persiste en la columna `mover`. |
 | `copiex/store.py` | 248 | SQLite en `~/.local/share/copiex/historial.db`: alta, actualización, pendientes, migración de `pausa_manual` y tabla `destinos` (`crear` acepta lista, `actualizar_destino`, `destinos_de`). |
 | `copiex/watcher.py` | 75 | Hilo cada 6 s que reanuda `paused`/`error` cuando origen y **todas** las carpetas destino están disponibles; respeta `pausa_manual`. |
-| `copiex/menu.py` | 181 | Textos de la interfaz: lector YAML mínimo de `menu.yaml`, con caché y textos por defecto; `texto("menu.nueva")`. |
+| `copiex/menu.py` | 455 | Textos de la interfaz: lector YAML mínimo de `menu.yaml`, textos por defecto en español e inglés, elección persistida en `~/.config/copiex/language` y `texto("menu.nueva")`/`formato(clave, …)`. |
 | `copiex/sound.py` | 105 | Alerta de fin de copia: reproduce el audio de `sounds/` (o el del sistema) con `canberra-gtk-play`, `paplay` o `gst-launch-1.0`, en segundo plano. |
 | `sounds/` | — | `copy-finished.wav` (alarma por defecto, sustituible) y `README.md` con las reglas de elección del fichero. |
-| `copiex/app.py` | 340 | `Adw.Application`: une motor, ventana, bandeja e IPC; acciones `nueva`/`ocultar`/`acerca`/`salir`; sonido una vez por copia terminada; argumento `--bandeja`; IPC con `dest` o `dests`. |
-| `copiex/window.py` | 314 | Ventana del historial: fila por copia con barra, velocidad, estado, «Reintentar»/«Cancelar»/«Eliminar» y, si hay varios destinos, una línea de cola por destino; menú (ocultar/acerca/salir) y botón «Nueva copia». |
-| `copiex/tray.py` | 334 | Icono de bandeja por StatusNotifierItem + D-Bus, sin dependencias; menú contextual. |
+| `copiex/app.py` | 381 | `Adw.Application`: une motor, ventana, bandeja e IPC; acciones `nueva`/`ocultar`/`idioma_es`/`idioma_en`/`acerca`/`salir`; sonido una vez por copia terminada; argumento `--bandeja`; IPC con `dest` o `dests`. |
+| `copiex/window.py` | 353 | Ventana del historial: fila por copia con barra, velocidad, estado, «Reintentar»/«Cancelar»/«Eliminar» y, si hay varios destinos, una línea de cola por destino; menú (ocultar/idioma/acerca/salir) y botón «Nueva copia». |
+| `copiex/tray.py` | 360 | Icono de bandeja por StatusNotifierItem + D-Bus, sin dependencias; menú contextual con submenú de idioma (radio Español/Inglés; Spanish/English en inglés). |
 | `copiex/ipc.py` | 126 | Socket Unix `$XDG_RUNTIME_DIR/copiex-<uid>/copiex.sock`; JSON por línea (`ping`, `show`, `copy`); cada conexión se atiende en un hilo propio (`listen(32)`) para que una colgada no retrase la siguiente. |
-| `copiex/nautilus_extension.py` | 980 | Extensión de Nautilus: menú contextual (etiquetas de `menu.yaml`), «Copiar» y «Cortar» (portapapeles con cabecera `copy`/`cut`, acepta `file://` y `mtp://`), envío por socket (`move: true` para cortar) y ciclo «Pegar con Copiex N destinos» (`_SelectorDestinos`, que muestra la URI MTP sin `%20`). `_Envio` hace connect/send/recv no bloqueantes con `GLib.io_add_watch` (sin hilos); `_arrancar_app()` usa el servicio D-Bus y deja `_arrancar_app_directo()` como respaldo. |
+| `copiex/nautilus_extension.py` | 1091 | Extensión de Nautilus: menú contextual (etiquetas de `menu.yaml` en español o inglés), «Copiar» y «Cortar» (portapapeles con cabecera `copy`/`cut`, acepta `file://` y `mtp://`), envío por socket (`move: true` para cortar) y ciclo «Pegar con Copiex N destinos» (`_SelectorDestinos`, que muestra la URI MTP sin `%20`). `_Envio` hace connect/send/recv no bloqueantes con `GLib.io_add_watch` (sin hilos); `_arrancar_app()` usa el servicio D-Bus y deja `_arrancar_app_directo()` como respaldo. |
 | `icons/` | — | Icono propio: `com.copiex.Manager.svg` (color) y `com.copiex.Manager-symbolic.svg` (una tinta, para la bandeja). |
 | `brand/` | — | Propuestas de logo descartadas y `preview.html`, la galería con la que se eligió el icono. |
-| `menu.yaml` | 50 | Nombres de las opciones de menú y textos de las ventanas emergentes, incluida la descripción de «Acerca de» y los de la selección de varios destinos. |
+| `menu.yaml` | 230 | Textos en español (raíz) e inglés (`en:`): opciones de menú, ventanas emergentes, estado de las copias, errores y selección de varios destinos. |
 | `uninstall.sh`, `copiex-launcher`, `com.copiex.Manager.desktop.in`, `com.copiex.Manager.service.in` | — | Limpieza de instalaciones antiguas de usuario (extensión, escritorio, servicio D-Bus, iconos, datos), lanzador, entrada de escritorio y plantilla del servicio `com.copiex.Manager` que usa la extensión para arrancar la app sin `fork`. |
 | `packaging/`, `upgrade.sh` | — | Empaquetado `.deb`: `build-deb.sh`, `resolver.py`, `deps.txt`, `postinst`, `postrm` y los helpers `instalar-dependencias`/`copiex-dependencias`. Genera un repositorio APT local con los `.deb` de las dependencias para instalar sin red. `upgrade.sh` actualiza las dependencias, reconstruye el `.deb` con las versiones actuales y reinstala Copiex. |
 
@@ -140,7 +149,7 @@ desde Nautilus, la extensión instalada en
 
 El pliego se renumeró el 13/11: al retirar los antiguos 9–11 (workers), «alerta sonora»,
 «Acerca de» y `menu.yaml` pasaron a ser los requerimientos 9, 10 y 11. El 16/11 se añadió
-el 12 (MTP).
+el 12 (MTP) y el 17/11 el 13 (selector de idioma).
 
 | # | Requerimiento | Estado |
 |---|---|---|
@@ -156,6 +165,7 @@ el 12 (MTP).
 | 10 | «Acerca de» con descripción corta y versión, en `menu.yaml` | Hecho: `app.acerca` con `Adw.AboutDialog` (versión 1.0.0 y descripción del YAML); sección 3 decies. |
 | 11 | `menu.yaml` con nombres de opciones y textos de ventanas | Hecho: menús de ventana, bandeja y Nautilus más diálogos leen `menu.yaml`; sección 3 decies. |
 | 12 | Copiar hacia o desde dispositivos `mtp://` | Hecho y probado el 16/11 con un Android real: ambos sentidos, varios destinos, pausa, cancelación y reanudación; sección 3 septendecies. |
+| 13 | Cambiar toda la interfaz entre español e inglés | Hecho el 17/11: selector en el menú del Centinela y de la ventana, preferencia persistida y etiquetas de Nautilus actualizadas sin reiniciar; sección 3 duovicies. |
 | E1 | No detecta copias de Nautilus estando activo | Corregido y verificado. |
 | E2 | Error de E/S sin reanudar ni botón de cancelar | Corregido: vigilante + botones «Reintentar»/«Cancelar». |
 | E3 | Varios ficheros se copian muy lentos | Medido y mejorado: −20 % de tiempo y −22 % de CPU en 2 000 ficheros pequeños, −14 % en un fichero de 256 MiB (`copy_file_range`, un `stat` por fichero, carpetas memorizadas); sección 3 duodecies. |
@@ -902,6 +912,43 @@ destinos y `Vigilante._motivo_espera()` devuelve `''` (puede continuar).
 destinos se reanuda automáticamente tras matar y volver a arrancar Copiex. Se publicó en
 el commit de esta corrección.
 
+## 3 duovicies. Selector de idioma español/inglés (17/11)
+
+Nuevo requerimiento 13: toda la interfaz debe poder cambiar entre español e inglés,
+incluidas las entradas de Copiex en el menú de Nautilus.
+
+- **Selector:** submenú «Idioma» → «Español» / «Inglés» en español, o «Language» →
+  «Spanish» / «English» en inglés, en el menú del Centinela y en el menú de tres rayas de
+  la ventana. En la bandeja se marcan con radio; en la ventana son dos acciones
+  (`app.idioma_es` y `app.idioma_en`).
+- **Persistencia:** `copiex/menu.py` guarda la elección en
+  `~/.config/copiex/language` (texto `es` o `en`) mediante fichero temporal +
+  `os.replace`; `COPIEX_LANGUAGE` la fuerza en pruebas. Si no existe, se usa español.
+- **Textos:** `menu.yaml` conserva el español en la raíz y añade la sección `en:` con las
+  mismas claves; `texto()` busca primero inglés y cae al español si falta una traducción.
+  `formato()` rellena los placeholders del estado (progreso, pausa, completada, etc.).
+- **Nautilus:** la extensión no puede importar el paquete, así que duplica un lector mínimo
+  de `menu.yaml` y lee `~/.config/copiex/language` **cada vez que construye el menú**. Al
+  cambiar el idioma en Copiex, las siguientes aperturas del menú contextual ya salen en el
+  idioma elegido, sin reiniciar Nautilus; si no existe la preferencia, usa español.
+- **Ventana:** al cambiar de idioma se destruye y reconstruye la ventana para refrescar
+  también las filas y los botones; si estaba oculta, se descarta y se crea de nuevo al
+  mostrarla. El menú del Centinela se refresca con `LayoutUpdated`.
+
+**Comprobado** el 17/11 con datos y configuración temporales:
+
+- `menu.yaml` tiene todas las claves en español e inglés; `texto("menu.nueva")` pasa de
+  «Nueva copia» a «New copy» y `nautilus.copiar` a «Copy with Copiex».
+- La ventana GTK real arranca en español, se cambia a inglés, se reconstruye y contiene
+  «New copy» y «Copy history».
+- El menú D-Bus del Centinela devuelve el submenú `Idioma` con `Español`/`Inglés` y el
+  estado radio correcto.
+- La extensión de Nautilus lee el fichero de idioma y devuelve «Copy with Copiex» y
+  «Paste with Copiex to N destinations» sin variables de entorno.
+
+No se ha hecho clic real en el submenú del panel ni se ha visto el menú de Nautilus con
+los ojos (Wayland); el usuario debe confirmarlo. No se ha hecho commit de este cambio.
+
 ## 4. Pendientes, por orden sugerido
 
 No hay trabajo pendiente del pliego. Queda la prueba real del usuario con el menú de
@@ -979,11 +1026,12 @@ y mover hacia/desde MTP.
 
 Ubuntu 26.04 «resolute», GNOME 50.1, Nautilus 50.2.2, GTK 4.22.4, PyGObject 3.56.2,
 Wayland. El 16/11 había un Android montado por MTP (`gvfsd-mtp` y `gvfs-fuse` 1.60). El
-proyecto **es un repositorio git** (rama `main`; último commit **`ce8d9ee`** «Empaquetar
-Copiex como .deb y añadir upgrade.sh»; remoto `repo-copiex` en GitHub). Ese commit incluye
-el trabajo del 13, 14 y 16/11 (motor de varios destinos, MTP, «Cortar», icono de bandeja,
-extensión sin hilos, `menu.yaml`), el empaquetado `.deb`, `upgrade.sh`, `.gitignore` y la
-retirada de `install.sh`. El árbol está limpio y el `.deb` no se versiona.
+proyecto **es un repositorio git** (rama `main`; último commit **`09fb53f`** «Persistir estado
+al reanudar copias recuperadas»; remoto `repo-copiex` en GitHub). Los commits incluyen el
+trabajo del 13, 14 y 16/11 (motor de varios destinos, MTP, «Cortar», icono de bandeja,
+extensión sin hilos, `menu.yaml`), el empaquetado `.deb`, `upgrade.sh`, `.gitignore`, la
+retirada de `install.sh` y el arreglo de reanudación. El selector de idioma está sin
+commitear; el `.deb` no se versiona.
 Historial real al retomar: **38 filas** y 13 filas en `destinos`. La app **no está en
 marcha**; se arranca con `./copiex-launcher --bandeja` (o la activa Nautilus) y el PID
 cambia, comprobar con `ps -eo pid,args | grep "[p]ython3 -m copiex"`. Nautilus está

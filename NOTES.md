@@ -29,6 +29,7 @@ esa descripción debe existir en un fichero texto nombrado menu.yaml
 11- El fichero nombrado menu.yaml contendrá los nombres de las opciones de  menu. Y si una opción de menu deriva en una ventana emergente, el texto de esa ventana debe estar
 reflejado en ese fichero menu.yaml
 12- Necesitamos que copiex también pueda copiar hacia o desde dispositivos mtp://
+13- La interfaz debe poder cambiar entre español e inglés desde el menú, incluidos los textos de Copiex en Nautilus.
 
 ### Errores detectados
 1- Copiex no detecta la copia que se intenta hacer a través de Nautilus cuando ya está activo en la ventana superior derecha.
@@ -38,20 +39,23 @@ momento de desconexión aparece algún botón para cancelar la copia si se quisi
 4- Cuando Copiex no está en ejecución, y doy clic derecho sobre un archivo y selecciono:  "Copiar con Copiex". Y luego en el dispositivo destino doy clic derecho "¨Pegar con Copiex"
 no veo que active e inicie la aplicación, y debería hacerlo.
 
-### Estado de implementación (16/11/2026)
+### Estado de implementación (17/11/2026)
 
-Los 12 requerimientos y los 4 errores están resueltos y probados. El 16/11 se añadieron el
+Los 13 requerimientos y los 4 errores están resueltos y probados. El 16/11 se añadieron el
 requerimiento 12 (copiar hacia/desde `mtp://`), «Cortar con Copiex» (mueve: copia y borra
 los orígenes al terminar, también con «Pegar con Copiex N destinos») y el icono a color en
-la bandeja (la «C» blanca sobre verde). El detalle técnico, las pruebas y el estado exacto
-al cerrar la sesión están en `TODO.md`; las reglas de trabajo, en `AGENTS.md`.
+la bandeja (la «C» blanca sobre verde). El 17/11 se añadió el requerimiento 13: selector de
+idioma español/inglés en el menú del Centinela y de la ventana, con preferencia guardada en
+`~/.config/copiex/language` y etiquetas de Nautilus que cambian sin reiniciar. El detalle
+técnico, las pruebas y el estado exacto al cerrar la sesión están en `TODO.md`; las reglas
+de trabajo, en `AGENTS.md`.
 
 «Cortar con Copiex» ya está confirmado por el usuario. Queda solo confirmar que el icono
 del panel es el verde. El código, `menu.yaml` y la documentación se commitearon primero en
 `ff317f2`; el empaquetado, `upgrade.sh`, `.gitignore` y la retirada de `install.sh` se
-publicaron después en **`ce8d9ee`** (`repo-copiex/main`). El 17/11 se corrigió la
-reanudación automática de copias recuperadas a varios destinos tras un kill; el arreglo de
-`copiex/engine.py` y la documentación se publicaron en el commit de esta corrección.
+publicaron después en **`ce8d9ee`** (`repo-copiex/main`). El 17/11 se publicó en
+**`09fb53f`** el arreglo de reanudación de copias recuperadas a varios destinos tras un
+kill; el selector de idioma y esta documentación están sin commitear.
 
 Desde el 16/11 hay un instalador `.deb` en la raíz del proyecto
 (`copiex_1.0.0_amd64.deb`, generado con `packaging/build-deb.sh`). Incluye las

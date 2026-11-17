@@ -14,11 +14,17 @@ import threading
 import time
 import traceback
 
+from .menu import formato, texto
 from .util import es_mtp
 
 BLOQUE = 1024 * 1024  # 1 MiB
 INTERVALO_AVISO = 0.12
 MOTIVO_CAMBIO = "el fichero de destino cambió durante la copia"
+
+
+def texto_espera(motivo: str) -> str:
+    """Traduce el motivo interno que se muestra en la ventana."""
+    return texto("errores.destino_cambio") if motivo == MOTIVO_CAMBIO else motivo
 
 log = logging.getLogger(__name__)  # mínimo entre avisos a la interfaz
 INTERVALO_GUARDADO = 0.5  # mínimo entre escrituras en SQLite
@@ -276,13 +282,18 @@ class Operacion:
             self.error = None
             self.espera = ""
             return
-        esperas = [d.espera for d in self.destinos if d.estado == "paused" and d.espera]
+        esperas = [
+            texto_espera(d.espera)
+            for d in self.destinos
+            if d.estado == "paused" and d.espera
+        ]
         self.espera = "; ".join(esperas)
         fallos = [d for d in self.destinos if d.estado == "error"]
         if fallos:
             self.estado = "error"
             self.error = "; ".join(
-                f"{short(d.ruta)}: {d.error or 'fallo desconocido'}" for d in fallos
+                f"{short(d.ruta)}: {d.error or texto('ventana.fallo_desconocido')}"
+                for d in fallos
             )
         elif any(d.estado == "paused" for d in self.destinos):
             self.estado = "paused"
@@ -334,7 +345,10 @@ class Operacion:
         """Un destino falló mientras se escribía: los demás siguen."""
         if not os.path.isdir(destino.ruta):
             self._destino_espera(
-                destino, f"esperando la carpeta de destino {short(destino.ruta)}"
+                destino,
+                formato(
+                    "errores.esperando_destino", ruta=short(destino.ruta)
+                ),
             )
             return
         destino.estado = "error"
@@ -493,7 +507,7 @@ class Operacion:
             if not os.path.isdir(destino.ruta):
                 self._destino_espera(
                     destino,
-                    f"esperando la carpeta de destino {short(destino.ruta)}",
+                    formato("errores.esperando_destino", ruta=short(destino.ruta)),
                 )
         for intento in range(3):
             plan, tamanos = self._planificar()
@@ -536,13 +550,13 @@ class Operacion:
         for destino in self.destinos:
             if destino.estado == "running":
                 destino.estado = "paused"
-                destino.espera = destino.espera or "copia interrumpida"
+                destino.espera = destino.espera or texto("errores.copia_interrumpida")
         if self._cancelado.is_set():
             self.estado = "cancelled"
         else:
             self._recalcular()
             if self.estado == "error" and not self.error:
-                self.error = "No se pudo copiar a todos los destinos"
+                self.error = texto("errores.todos_destinos")
             # «Cortar» termina cuando los datos están en todos los destinos: los
             # orígenes se borran aquí, nunca antes ni si algo quedó a medias.
             if self.estado == "done":
@@ -610,7 +624,10 @@ class Operacion:
                 if not os.path.isdir(destino.ruta):
                     self._destino_espera(
                         destino,
-                        f"esperando la carpeta de destino {short(destino.ruta)}",
+                        formato(
+                            "errores.esperando_destino",
+                            ruta=short(destino.ruta),
+                        ),
                     )
                     continue
                 if os.path.exists(ruta) and os.path.getsize(ruta) == tam:
@@ -653,11 +670,11 @@ class Operacion:
         for origen in self.origenes:
             origen = os.path.abspath(origen)
             if not os.path.exists(origen):
-                raise ErrorCopia(f"No existe: {origen}")
+                raise ErrorCopia(formato("errores.no_existe", ruta=origen))
 
         planes = [_pares(self.origenes, destino.ruta) for destino in self.destinos]
         if not planes or not planes[0]:
-            raise ErrorCopia("No hay nada que copiar")
+            raise ErrorCopia(texto("errores.no_hay_nada"))
 
         tamanos = {}
         plan = []
@@ -1029,7 +1046,7 @@ class Motor:
         """
         origenes = [os.path.abspath(o) for o in origenes]
         if not origenes:
-            raise ErrorCopia("No has indicado ningún origen")
+            raise ErrorCopia(texto("errores.no_origen_indicado"))
         if isinstance(destinos, str):
             destinos = [destinos]
         unicos = []
@@ -1039,12 +1056,16 @@ class Motor:
                 unicos.append(ruta)
         destinos = unicos
         if not destinos:
-            raise ErrorCopia("No has indicado ningún destino")
+            raise ErrorCopia(texto("errores.no_destino_indicado"))
         for destino in destinos:
             for origen in origenes:
                 if _es_hijo(destino, origen):
                     raise ErrorCopia(
-                        f"El destino está dentro del origen ({short(destino)} ⊂ {short(origen)})"
+                        formato(
+                            "errores.destino_dentro_origen",
+                            destino=short(destino),
+                            origen=short(origen),
+                        )
                     )
                 # Pegar en la misma carpeta escribiría sobre el propio origen
                 # (y un «Cortar» lo borraría): mejor rechazarlo que perderlo.
@@ -1053,7 +1074,7 @@ class Motor:
                 )
                 if os.path.abspath(objetivo) == os.path.abspath(origen):
                     raise ErrorCopia(
-                        f"El destino es la misma carpeta que el origen ({short(origen)})"
+                        formato("errores.destino_igual_origen", origen=short(origen))
                     )
         # Las comprobaciones de disco (y su coste si un dispositivo no responde)
         # se hacen en el hilo de la copia: la tarea aparece al instante y, si la

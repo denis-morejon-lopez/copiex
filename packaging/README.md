@@ -16,6 +16,8 @@ sudo apt install ./copiex_1.0.0_amd64.deb
 ## Qué instala
 
 - `/opt/copiex`: la aplicación, `menu.yaml`, `sounds/` y el código Python.
+- `menu.yaml` incluye español e inglés; la preferencia del usuario se guarda en
+  `~/.config/copiex/language` y no forma parte del paquete.
 - `/usr/bin/copiex`: lanzador para el escritorio y el servicio D-Bus.
 - `/usr/share/applications/com.copiex.Manager.desktop`
 - `/usr/share/dbus-1/services/com.copiex.Manager.service`

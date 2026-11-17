@@ -136,59 +136,162 @@ _TEXTO_DEFECTO = {
     "anadir_destino": "Añadir otro destino",
     "finalizar_seleccion": "Finalizar selección",
     "elegir_destino_titulo": "¿Qué otra carpeta quieres como destino?",
+    "error_copia": "No se pudo copiar con Copiex",
+    "sin_nada_titulo": "No hay nada que pegar",
+    "sin_nada_detalle": (
+        "Selecciona los ficheros y usa «Copiar con Copiex» (o Ctrl+C en "
+        "Nautilus) antes de pegarlos aquí."
+    ),
+    "ya_es_primera_titulo": "Esa ya es la primera carpeta",
+    "ya_es_primera_detalle": "Elige otra ubicación para el segundo destino.",
+    "sin_destinos_titulo": "No has añadido ningún destino",
+    "sin_destinos_detalle": (
+        "Cierra esta ventana y usa «Pegar con Copiex» para copiar solo en esta carpeta."
+    ),
+    "sin_gtk_titulo": "No se puede elegir varios destinos",
+    "sin_gtk_detalle": "Falta GTK en Nautilus.",
+    "contacto": "No se pudo contactar con Copiex",
+    "rechazo": "Copiex rechazó la operación",
 }
-_textos_menu = None
+
+_TEXTO_DEFECTO_EN = {
+    "copiar": "Copy with Copiex",
+    "cortar": "Cut with Copiex",
+    "pegar": "Paste with Copiex",
+    "pegar_varios": "Paste with Copiex to N destinations",
+    "copiar_ayuda": "Mark these items to copy them with Copiex",
+    "cortar_ayuda": (
+        "Move these items with Copiex: they are copied and the originals "
+        "are deleted when the copy finishes"
+    ),
+    "pegar_ayuda": (
+        "Copy here what was marked with Copiex (or the clipboard) with "
+        "progress, pause and resume"
+    ),
+    "pegar_varios_ayuda": (
+        "Copy to this folder and others you choose, reading the source only once"
+    ),
+    "destinos_titulo": "Copy destinations",
+    "destinos_ayuda": (
+        "This folder is the first destination. Add the others and click "
+        "«Finish selection»."
+    ),
+    "anadir_destino": "Add another destination",
+    "finalizar_seleccion": "Finish selection",
+    "elegir_destino_titulo": "What other folder do you want as destination?",
+    "error_copia": "Could not copy with Copiex",
+    "sin_nada_titulo": "There is nothing to paste",
+    "sin_nada_detalle": (
+        "Select the files and use «Copy with Copiex» (or Ctrl+C in Nautilus) "
+        "before pasting them here."
+    ),
+    "ya_es_primera_titulo": "That is already the first folder",
+    "ya_es_primera_detalle": "Choose another location for the second destination.",
+    "sin_destinos_titulo": "You have not added any destination",
+    "sin_destinos_detalle": (
+        "Close this window and use «Paste with Copiex» to copy only into this folder."
+    ),
+    "sin_gtk_titulo": "Cannot choose multiple destinations",
+    "sin_gtk_detalle": "GTK is missing in Nautilus.",
+    "contacto": "Could not contact Copiex",
+    "rechazo": "Copiex rejected the operation",
+}
 
 
-def _leer_seccion_nautilus(ruta: str) -> dict:
-    """Valores de la sección `nautilus:` de menu.yaml (subconjunto de YAML)."""
-    valores = {}
-    dentro = False
+def _idioma_actual() -> str:
+    """Idioma elegido por la aplicación (`es` o `en`)."""
+    elegido = os.environ.get("COPIEX_LANGUAGE", "").strip().lower()
+    if elegido in ("es", "en"):
+        return elegido
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    try:
+        with open(os.path.join(base, "copiex", "language"), encoding="utf-8") as f:
+            elegido = f.read().strip().lower()
+    except OSError:
+        return "es"
+    return elegido if elegido in ("es", "en") else "es"
+
+
+def _leer_menu(ruta: str) -> dict:
+    """Lector mínimo de mapas anidados de menu.yaml."""
+    datos: dict = {}
+    pila = [(-1, datos)]
     with open(ruta, encoding="utf-8") as fichero:
         for linea in fichero:
             if not linea.strip() or linea.lstrip().startswith("#"):
                 continue
             sangria = len(linea) - len(linea.lstrip(" "))
             contenido = linea.strip()
-            if sangria == 0:
-                dentro = contenido.rstrip(":") == "nautilus"
+            if ":" not in contenido:
                 continue
-            if dentro and ":" in contenido:
-                clave, _, valor = contenido.partition(":")
-                valor = valor.strip()
+            clave, _, valor = contenido.partition(":")
+            clave, valor = clave.strip(), valor.strip()
+            while len(pila) > 1 and sangria <= pila[-1][0]:
+                pila.pop()
+            destino = pila[-1][1]
+            if valor == "":
+                hijo: dict = {}
+                destino[clave] = hijo
+                pila.append((sangria, hijo))
+            else:
                 if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in "\"'":
                     valor = valor[1:-1]
-                if valor:
-                    valores[clave.strip()] = valor
+                destino[clave] = valor
+    return datos
+
+
+def _leer_seccion_nautilus(ruta: str, idioma: str = "es") -> dict:
+    """Valores de `nautilus:` (o `en.nautilus:`) de menu.yaml."""
+    datos = _leer_menu(ruta)
+    fuentes = [datos]
+    if idioma == "en":
+        ingles = datos.get("en")
+        if isinstance(ingles, dict):
+            fuentes.append(ingles)
+    valores = {}
+    for fuente in fuentes:
+        seccion = fuente.get("nautilus")
+        if isinstance(seccion, dict):
+            valores.update(
+                {k: v for k, v in seccion.items() if isinstance(v, str)}
+            )
     return valores
 
 
 def _textos() -> dict:
-    """Textos del menú, con los del fichero por delante de los de reserva."""
-    global _textos_menu
-    if _textos_menu is not None:
-        return _textos_menu
-    textos = dict(_TEXTO_DEFECTO)
+    """Textos del menú en el idioma activo, con el fichero por delante."""
+    idioma = _idioma_actual()
+    textos = dict(_TEXTO_DEFECTO_EN if idioma == "en" else _TEXTO_DEFECTO)
     try:
         info = Gio.DesktopAppInfo.new(DESKTOP_ID)
         linea = info.get_commandline() if info is not None else ""
         argv = list(GLib.shell_parse_argv(linea)[1]) if linea else []
+        candidatas = [os.environ.get("COPIEX_MENU")]
         if argv:
-            candidatas = [
-                os.path.join(os.path.dirname(os.path.abspath(argv[0])), "menu.yaml"),
-                # Instalación con el paquete .deb: el lanzador está en /usr/bin
-                # y los datos de la aplicación, en /opt/copiex.
-                "/opt/copiex/menu.yaml",
-                "/usr/share/copiex/menu.yaml",
-            ]
-            for ruta in candidatas:
-                if os.path.isfile(ruta):
-                    textos.update(_leer_seccion_nautilus(ruta))
-                    break
+            candidatas.append(
+                os.path.join(os.path.dirname(os.path.abspath(argv[0])), "menu.yaml")
+            )
+        # Instalación con el paquete .deb: el lanzador está en /usr/bin y los
+        # datos de la aplicación, en /opt/copiex.
+        candidatas.extend(("/opt/copiex/menu.yaml", "/usr/share/copiex/menu.yaml"))
+        for ruta in candidatas:
+            if ruta and os.path.isfile(ruta):
+                textos.update(_leer_seccion_nautilus(ruta, "es"))
+                if idioma == "en":
+                    textos.update(_leer_seccion_nautilus(ruta, "en"))
+                break
     except Exception:
         pass  # sin menu.yaml se usan los textos de reserva
-    _textos_menu = textos
     return textos
+
+
+def _texto(clave: str, **valores) -> str:
+    """Texto traducido con placeholders, tolerante a claves ausentes."""
+    valor = _textos().get(clave, clave)
+    try:
+        return valor.format(**valores)
+    except (KeyError, ValueError, IndexError):
+        return valor
 
 # Copiex arranca desde Nautilus con la salida descartada: los `print` de la
 # extensión no llegan a ningún sitio, así que lo que importa se anota aquí.
@@ -500,13 +603,11 @@ class _Envio:
                 f"{time.monotonic() - self.inicio:.3f}s -> {respuesta}"
             )
             if self.al_fallar is not None and respuesta.get("ok") is False:
-                self.al_fallar(
-                    respuesta.get("error") or "Copiex rechazó la operación"
-                )
+                self.al_fallar(respuesta.get("error") or _texto("rechazo"))
             return
         _traza(f"sin contacto con Copiex ({self.cmd}): {error}")
         if self.al_fallar is not None:
-            self.al_fallar("No se pudo contactar con Copiex")
+            self.al_fallar(_texto("contacto"))
 
 
 def _enviar_async(mensaje: dict, al_fallar=None):
@@ -741,9 +842,8 @@ def _con_origenes(accion):
         estado["hecho"] = True
         _traza("pegar sin orígenes: no hay nada utilizable")
         _aviso(
-            "No hay nada que pegar",
-            "Selecciona los ficheros y usa «Copiar con Copiex» "
-            "(o Ctrl+C en Nautilus) antes de pegarlos aquí.",
+            _texto("sin_nada_titulo"),
+            _texto("sin_nada_detalle"),
         )
         return False
 
@@ -762,7 +862,7 @@ def _al_pegar(destino: str):
 
         def fallo(motivo):
             _traza(f"la aplicación rechazó la copia: {motivo}")
-            _aviso("No se pudo copiar con Copiex", str(motivo))
+            _aviso(_texto("error_copia"), str(motivo))
 
         mensaje = {"cmd": "copy", "sources": uris, "dest": destino}
         if modo == "cut":
@@ -787,7 +887,7 @@ def _lanzar_copia_varios(uris, destinos, modo="copy"):
 
     def fallo(motivo):
         _traza(f"la aplicación rechazó la copia a varios destinos: {motivo}")
-        _aviso("No se pudo copiar con Copiex", str(motivo))
+        _aviso(_texto("error_copia"), str(motivo))
 
     mensaje = {"cmd": "copy", "sources": uris, "dests": list(destinos)}
     if modo == "cut":
@@ -808,7 +908,7 @@ class _SelectorDestinos:
         self._destinos = [primer_destino]
         textos = _textos()
         self._ventana = Gtk.Window(
-            title=textos.get("destinos_titulo", "Destinos de la copia")
+            title=textos.get("destinos_titulo", _texto("destinos_titulo"))
         )
         self._ventana.set_default_size(520, 340)
         self._ventana.set_modal(True)
@@ -817,7 +917,9 @@ class _SelectorDestinos:
         for lado in ("top", "bottom", "start", "end"):
             getattr(caja, f"set_margin_{lado}")(16)
         ayuda = Gtk.Label(
-            label=textos.get("destinos_ayuda", ""), wrap=True, xalign=0
+            label=textos.get("destinos_ayuda", _texto("destinos_ayuda")),
+            wrap=True,
+            xalign=0,
         )
         caja.append(ayuda)
 
@@ -833,11 +935,11 @@ class _SelectorDestinos:
             halign=Gtk.Align.END,
         )
         self._anadir = Gtk.Button(
-            label=textos.get("anadir_destino", "Añadir otro destino")
+            label=textos.get("anadir_destino", _texto("anadir_destino"))
         )
         self._anadir.connect("clicked", self._al_anadir)
         finalizar = Gtk.Button(
-            label=textos.get("finalizar_seleccion", "Finalizar selección"),
+            label=textos.get("finalizar_seleccion", _texto("finalizar_seleccion")),
             css_classes=["suggested-action"],
         )
         finalizar.connect("clicked", self._al_finalizar)
@@ -872,7 +974,7 @@ class _SelectorDestinos:
     def _al_anadir(self, *_):
         textos = _textos()
         dialogo = Gtk.FileDialog(
-            title=textos.get("elegir_destino_titulo", "Elige otra carpeta")
+            title=textos.get("elegir_destino_titulo", _texto("elegir_destino_titulo"))
         )
         dialogo.select_folder(self._ventana, None, self._elegida)
 
@@ -886,8 +988,8 @@ class _SelectorDestinos:
             return
         if uri == self._destinos[0]:
             _aviso(
-                "Esa ya es la primera carpeta",
-                "Elige otra ubicación para el segundo destino.",
+                _texto("ya_es_primera_titulo"),
+                _texto("ya_es_primera_detalle"),
             )
             return
         if uri in self._destinos:
@@ -898,9 +1000,8 @@ class _SelectorDestinos:
     def _al_finalizar(self, *_):
         if len(self._destinos) < 2:
             _aviso(
-                "No has añadido ningún destino",
-                "Cierra esta ventana y usa «Pegar con Copiex» para copiar "
-                "solo en esta carpeta.",
+                _texto("sin_destinos_titulo"),
+                _texto("sin_destinos_detalle"),
             )
             return
         destinos = list(self._destinos)
@@ -925,7 +1026,7 @@ class _SelectorDestinos:
 def _al_pegar_varios(destino: str):
     """Abre el ciclo de selección de destinos para la carpeta pulsada."""
     if Gtk is None:
-        _aviso("No se puede elegir varios destinos", "Falta GTK en Nautilus.")
+        _aviso(_texto("sin_gtk_titulo"), _texto("sin_gtk_detalle"))
         return
 
     def abrir(uris, modo):
@@ -951,8 +1052,8 @@ class ExtencionCopiex(GObject.GObject, Nautilus.MenuProvider):
         item.connect("activate", self._activar_copiar, uris)
         cortar = Nautilus.MenuItem(
             name="Copiex::cortar",
-            label=textos.get("cortar", "Cortar con Copiex"),
-            tip=textos.get("cortar_ayuda", ""),
+            label=textos.get("cortar", _texto("cortar")),
+            tip=textos.get("cortar_ayuda", _texto("cortar_ayuda")),
         )
         cortar.connect("activate", self._activar_cortar, uris)
         return [item, cortar]
@@ -970,8 +1071,8 @@ class ExtencionCopiex(GObject.GObject, Nautilus.MenuProvider):
         item.connect("activate", self._activar_pegar, destino)
         varios = Nautilus.MenuItem(
             name="Copiex::pegar_varios",
-            label=textos.get("pegar_varios", "Pegar con Copiex N destinos"),
-            tip=textos.get("pegar_varios_ayuda", ""),
+            label=textos.get("pegar_varios", _texto("pegar_varios")),
+            tip=textos.get("pegar_varios_ayuda", _texto("pegar_varios_ayuda")),
         )
         varios.connect("activate", self._activar_pegar_varios, destino)
         return [item, varios]

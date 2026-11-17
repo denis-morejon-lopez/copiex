@@ -13,7 +13,7 @@ import traceback
 
 import gi
 
-from .menu import texto
+from .menu import idioma_actual, texto
 from .util import ICONO_APP, icono_disponible
 
 from gi.repository import Gio, GLib
@@ -112,7 +112,10 @@ DBUSMENU_XML = """
 """
 
 OCULTAR_ID = 1
-SALIR_ID = 2
+IDIOMA_ID = 2
+ESPANOL_ID = 3
+INGLES_ID = 4
+SALIR_ID = 5
 
 
 class Bandeja:
@@ -123,10 +126,12 @@ class Bandeja:
     # quiere el usuario.
     ICONO = ICONO_APP
 
-    def __init__(self, al_pulsar, al_ocultar, al_salir, titulo="Copiex"):
+    def __init__(self, al_pulsar, al_ocultar, al_salir, al_idioma=None,
+                 titulo="Copiex"):
         self._al_pulsar = al_pulsar  # clic izquierdo: mostrar/ocultar
         self._al_ocultar = al_ocultar
         self._al_salir = al_salir
+        self._al_idioma = al_idioma or (lambda _codigo: None)
         self._titulo = titulo
         # Al crearse la bandeja todavía no hay ventana: la opción es «Mostrar».
         self._etiqueta = texto("menu.mostrar")
@@ -219,8 +224,9 @@ class Bandeja:
             "IconPixmap": GLib.Variant("aa(iiay)", []),
             "AttentionIconPixmap": GLib.Variant("aa(iiay)", []),
             "OverlayIconPixmap": GLib.Variant("aa(iiay)", []),
-            "ToolTip": GLib.Variant("(sa(iiay)ss)", (self._icono, [], self._titulo,
-                                                      "Copiex para Nautilus")),
+            "ToolTip": GLib.Variant("(sa(iiay)ss)", (
+                self._icono, [], self._titulo, texto("aplicacion.tooltip")
+            )),
             "Menu": GLib.Variant("o", "/MenuBar"),
             "ContextMenu": GLib.Variant("o", "/MenuBar"),
         }
@@ -239,8 +245,23 @@ class Bandeja:
     # com.canonical.dbusmenu
     # ------------------------------------------------------------------
     def _items(self):
+        idioma = idioma_actual()
         return {
             OCULTAR_ID: {"label": GLib.Variant("s", self._etiqueta)},
+            IDIOMA_ID: {
+                "label": GLib.Variant("s", texto("menu.idioma")),
+                "children-display": GLib.Variant("s", "submenu"),
+            },
+            ESPANOL_ID: {
+                "label": GLib.Variant("s", texto("menu.espanol")),
+                "toggle-type": GLib.Variant("s", "radio"),
+                "toggle-state": GLib.Variant("i", 1 if idioma == "es" else 0),
+            },
+            INGLES_ID: {
+                "label": GLib.Variant("s", texto("menu.ingles")),
+                "toggle-type": GLib.Variant("s", "radio"),
+                "toggle-state": GLib.Variant("i", 1 if idioma == "en" else 0),
+            },
             SALIR_ID: {"label": GLib.Variant("s", texto("menu.salir"))},
         }
 
@@ -250,9 +271,15 @@ class Bandeja:
         if item_id == 0:
             hijos = [
                 GLib.Variant("(ia{sv}av)", self._estructura(identificador))
-                for identificador in (OCULTAR_ID, SALIR_ID)
+                for identificador in (OCULTAR_ID, IDIOMA_ID, SALIR_ID)
             ]
             props = {"children-display": GLib.Variant("s", "submenu")}
+        elif item_id == IDIOMA_ID:
+            hijos = [
+                GLib.Variant("(ia{sv}av)", self._estructura(identificador))
+                for identificador in (ESPANOL_ID, INGLES_ID)
+            ]
+            props = self._items().get(item_id, {})
         else:
             hijos = []
             props = self._items().get(item_id, {})
@@ -287,6 +314,10 @@ class Bandeja:
                 if evento in ("clicked", "activation"):
                     if identificador == OCULTAR_ID:
                         self._al_ocultar()
+                    elif identificador == ESPANOL_ID:
+                        self._al_idioma("es")
+                    elif identificador == INGLES_ID:
+                        self._al_idioma("en")
                     elif identificador == SALIR_ID:
                         self._al_salir()
                 invocacion.return_value(None)
@@ -306,6 +337,20 @@ class Bandeja:
                 pass
 
     # ------------------------------------------------------------------
+    def refrescar(self):
+        """Avisa al panel de que cambien las etiquetas del menú (idioma)."""
+        self._revision += 1
+        try:
+            self.conn.emit_signal(
+                None,
+                "/MenuBar",
+                "com.canonical.dbusmenu",
+                "LayoutUpdated",
+                GLib.Variant("(ui)", (self._revision, 0)),
+            )
+        except Exception:
+            traceback.print_exc()
+
     def cambiar_etiqueta(self, etiqueta: str):
         """Cambia el texto de la entrada «Mostrar/Ocultar ventana»."""
         if etiqueta == self._etiqueta:

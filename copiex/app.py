@@ -16,7 +16,12 @@ from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 from .engine import ErrorCopia, Motor  # noqa: E402
 from . import __version__  # noqa: E402
 from .ipc import ServidorIpc  # noqa: E402
-from .menu import texto  # noqa: E402
+from .menu import (  # noqa: E402
+    cambiar_idioma as guardar_idioma,
+    formato,
+    idioma_actual,
+    texto,
+)
 from .sound import reproducir  # noqa: E402
 from .logs import configurar_registro  # noqa: E402
 from .store import Store  # noqa: E402
@@ -76,6 +81,8 @@ class Aplicacion(Adw.Application):
         for nombre, metodo in (
             ("nueva", self.pedir_nueva_copia),
             ("ocultar", self.ocultar_ventana),
+            ("idioma_es", lambda: self.cambiar_idioma("es")),
+            ("idioma_en", lambda: self.cambiar_idioma("en")),
             ("acerca", self.acerca),
             ("salir", self.salir),
         ):
@@ -94,6 +101,7 @@ class Aplicacion(Adw.Application):
                     al_pulsar=self.alternar_ventana,
                     al_ocultar=self.alternar_ventana,
                     al_salir=self.salir,
+                    al_idioma=self.cambiar_idioma,
                 )
                 self._visibilidad_cambiada()  # aún sin ventana: «Mostrar ventana»
             except Exception:
@@ -227,21 +235,28 @@ class Aplicacion(Adw.Application):
                 destinos = [uri_to_path(u) for u in uris_destino if u]
                 mover = bool(mensaje.get("move"))
                 if not origenes:
-                    raise ValueError("Nautilus no ha indicado ningún origen")
+                    raise ValueError(texto("errores.no_origenes"))
                 if not destinos:
-                    raise ValueError("Nautilus no ha indicado ningún destino")
+                    raise ValueError(texto("errores.no_destinos"))
                 for origen in origenes:
                     if not os.path.exists(origen):
-                        raise ValueError(f"No existe: {origen}")
+                        raise ValueError(
+                            formato("errores.no_existe", ruta=origen)
+                        )
                 for destino in destinos:
                     if not os.path.isdir(destino):
-                        raise ValueError(f"El destino no es una carpeta: {destino}")
+                        raise ValueError(
+                            formato("errores.destino_no_carpeta", ruta=destino)
+                        )
             except Exception as exc:  # respuesta de error a la extensión
                 log.warning("IPC copy rechazado: %s", exc)
                 return {"ok": False, "error": str(exc)}
             GLib.idle_add(self._crear_copia_desde_ipc, origenes, destinos, mover)
             return {"ok": True}
-        return {"ok": False, "error": f"comando desconocido: {comando}"}
+        return {
+            "ok": False,
+            "error": formato("errores.comando_desconocido", comando=comando),
+        }
 
     def _crear_copia_desde_ipc(self, origenes, destinos, mover=False):
         """Crea la copia pedida por la extensión. Devuelve False porque
@@ -282,6 +297,34 @@ class Aplicacion(Adw.Application):
         )
         dialogo.present(self.ventana)
         log.debug("mostrado «Acerca de» (versión %s)", __version__)
+
+    def cambiar_idioma(self, codigo):
+        """Cambia los textos de toda la aplicación y lo guarda para Nautilus."""
+        codigo = (codigo or "").strip().lower()
+        if codigo not in ("es", "en") or codigo == idioma_actual():
+            return False
+        if not guardar_idioma(codigo):
+            return False
+        # Cerrar y reconstruir la ventana desde el callback del menú puede
+        # reentrar en GTK; se deja para el siguiente ciclo del bucle principal.
+        GLib.idle_add(self._aplicar_cambio_idioma, codigo)
+        return False
+
+    def _aplicar_cambio_idioma(self, codigo):
+        if self.bandeja is not None:
+            self._visibilidad_cambiada()
+            self.bandeja.refrescar()
+        if self.ventana is not None:
+            visible = self.ventana.get_visible()
+            ventana = self.ventana
+            self.ventana = None
+            # También se descarta si estaba oculta: al volver a abrirla debe
+            # nacer con los textos nuevos, no con los de la sesión anterior.
+            ventana.destroy()
+            if visible:
+                self.do_activate()
+        log.info("textos de la interfaz cambiados a %s", codigo)
+        return False
 
     def alternar_ventana(self):
         if self.ventana is None or not self.ventana.get_visible():

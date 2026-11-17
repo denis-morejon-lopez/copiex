@@ -16,6 +16,7 @@ import logging
 import os
 import threading
 
+from .menu import formato
 from .util import short_path
 
 INTERVALO = 6.0  # segundos entre revisiones
@@ -66,10 +67,14 @@ class Vigilante(threading.Thread):
         """
         for destino in getattr(op, "destinos", []):
             if destino.estado != "done" and not os.path.isdir(destino.ruta):
-                return f"esperando la carpeta de destino {short_path(destino.ruta)}"
+                return formato(
+                    "errores.esperando_destino", ruta=short_path(destino.ruta)
+                )
         for origen in op.origenes:
             try:
                 os.stat(origen)
             except OSError:  # no existe, o el dispositivo no responde
-                return f"esperando a que aparezca {short_path(origen)}"
+                return formato(
+                    "errores.esperando_origen", ruta=short_path(origen)
+                )
         return ""

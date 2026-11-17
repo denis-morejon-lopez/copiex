@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
-from .menu import texto
+from .engine import texto_espera
+from .menu import formato, texto
 from .util import (
     APP_NAME,
     ICONO_APP,
@@ -62,6 +63,10 @@ class VentanaCopias(Adw.ApplicationWindow):
         menu = Gtk.MenuButton(icon_name="open-menu-symbolic")
         modelo = Gio.Menu()
         modelo.append(texto("menu.ocultar"), "app.ocultar")
+        idiomas = Gio.Menu()
+        idiomas.append(texto("menu.espanol"), "app.idioma_es")
+        idiomas.append(texto("menu.ingles"), "app.idioma_en")
+        modelo.append_submenu(texto("menu.idioma"), idiomas)
         modelo.append(texto("menu.acerca"), "app.acerca")
         modelo.append(texto("menu.salir"), "app.salir")
         menu.set_menu_model(modelo)
@@ -143,7 +148,7 @@ class VentanaCopias(Adw.ApplicationWindow):
         datos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5, hexpand=True)
         varios = len(op.destinos) > 1
         titulo = Gtk.Label(
-            label=(f"Copia a {len(op.destinos)} destinos" if varios
+            label=(formato("ventana.copia_varios", n=len(op.destinos)) if varios
                    else short_path(op.destino)),
             xalign=0,
             css_classes=["heading"],
@@ -214,7 +219,11 @@ class VentanaCopias(Adw.ApplicationWindow):
         fila["barra"].set_fraction(op.fraccion)
         if op.total_bytes > 0:
             fila["barra"].set_text(
-                f"{fmt_bytes(op.copiados)} de {fmt_bytes(op.total_bytes)}"
+                formato(
+                    "ventana.de",
+                    hecho=fmt_bytes(op.copiados),
+                    total=fmt_bytes(op.total_bytes),
+                )
             )
         else:
             fila["barra"].set_text("")
@@ -222,18 +231,25 @@ class VentanaCopias(Adw.ApplicationWindow):
         for linea, destino in zip(fila.get("destinos") or [], op.destinos):
             linea.remove_css_class("error")
             if destino.estado == "done":
-                detalle = f"Completado · {fmt_bytes(destino.total_bytes)}"
+                detalle = formato(
+                    "ventana.completado", bytes=fmt_bytes(destino.total_bytes)
+                )
             elif destino.estado == "paused":
-                detalle = "En pausa"
+                detalle = texto("ventana.en_pausa")
                 if destino.espera:
-                    detalle += f" · {destino.espera}"
+                    detalle += f" · {texto_espera(destino.espera)}"
             elif destino.estado == "error":
-                detalle = f"Error: {destino.error or 'fallo desconocido'}"
+                detalle = formato(
+                    "ventana.error",
+                    detalle=destino.error or texto("ventana.fallo_desconocido"),
+                )
                 linea.add_css_class("error")
             else:
-                detalle = (
-                    f"{int(destino.fraccion * 100)} % · "
-                    f"{fmt_bytes(destino.copiados)} de {fmt_bytes(destino.total_bytes)}"
+                detalle = formato(
+                    "ventana.progreso_destino",
+                    pct=int(destino.fraccion * 100),
+                    hecho=fmt_bytes(destino.copiados),
+                    total=fmt_bytes(destino.total_bytes),
                 )
             linea.set_text(f"• {short_path(destino.ruta)} · {detalle}")
 
@@ -252,39 +268,62 @@ class VentanaCopias(Adw.ApplicationWindow):
                 partes.append(fmt_velocidad(op.velocidad))
             restante = op.restante
             if restante is not None:
-                partes.append(f"quedan {fmt_restante(restante)}")
-            partes.append(f"{op.archivos_ok}/{op.total_archivos} elementos")
-            etiqueta.set_text("Copiando · " + " · ".join(partes))
+                partes.append(
+                    formato("ventana.quedan", tiempo=fmt_restante(restante))
+                )
+            partes.append(
+                formato(
+                    "ventana.elementos",
+                    hechos=op.archivos_ok,
+                    total=op.total_archivos,
+                )
+            )
+            etiqueta.set_text(
+                formato("ventana.copiando", detalle=" · ".join(partes))
+            )
             fila["pausa"].set_label(texto("acciones.pausar"))
         elif op.estado == "paused":
             # `espera` explica por qué el vigilante aún no la ha reanudado
-            detalle = op.espera or (
-                f"{fmt_bytes(op.copiados)} copiados "
-                f"({op.archivos_ok}/{op.total_archivos} elementos)"
+            detalle = op.espera or formato(
+                "ventana.pausa_detalle",
+                bytes=fmt_bytes(op.copiados),
+                hechos=op.archivos_ok,
+                total=op.total_archivos,
             )
             hechos = sum(1 for d in op.destinos if d.estado == "done")
             if len(op.destinos) > 1 and hechos:
                 detalle = (
-                    f"{hechos} de {len(op.destinos)} destinos completados · "
+                    formato(
+                        "ventana.destinos_completados",
+                        hechos=hechos,
+                        total=len(op.destinos),
+                    )
                     + detalle
                 )
-            etiqueta.set_text(f"En pausa · {detalle}")
+            etiqueta.set_text(f"{texto('ventana.en_pausa')} · {detalle}")
             fila["pausa"].set_label(texto("acciones.reanudar"))
         elif op.estado == "error":
-            detalle = op.error or "fallo desconocido"
+            detalle = op.error or texto("ventana.fallo_desconocido")
             if op.espera:
                 detalle += f" · {op.espera}"
-            etiqueta.set_text(f"Error: {detalle}")
+            etiqueta.set_text(formato("ventana.error", detalle=detalle))
             etiqueta.add_css_class("error")
             fila["pausa"].set_label(texto("acciones.reintentar"))
         elif op.estado == "done":
             etiqueta.set_text(
-                f"Completada · {fmt_bytes(op.total_bytes)} en "
-                f"{op.total_archivos} elementos"
+                formato(
+                    "ventana.completada",
+                    bytes=fmt_bytes(op.total_bytes),
+                    n=op.total_archivos,
+                )
             )
         else:  # cancelled
             etiqueta.set_text(
-                f"Cancelada · {fmt_bytes(op.copiados)} de {fmt_bytes(op.total_bytes)}"
+                formato(
+                    "ventana.cancelada",
+                    hecho=fmt_bytes(op.copiados),
+                    total=fmt_bytes(op.total_bytes),
+                )
             )
 
     # ------------------------------------------------------------------

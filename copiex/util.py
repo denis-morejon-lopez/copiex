@@ -7,6 +7,8 @@ import os
 import tempfile
 import urllib.parse
 
+from .menu import formato, texto
+
 APP_ID = "com.copiex.Manager"
 APP_NAME = "Copiex"
 EXTENSION_NAME = "copiex.py"
@@ -71,25 +73,22 @@ def uri_to_path(uri: str) -> str:
     """
     uri = (uri or "").strip()
     if not uri:
-        raise ValueError("Ruta vacía")
+        raise ValueError(texto("errores.ruta_vacia"))
     parsed = urllib.parse.urlparse(uri)
     if parsed.scheme == "":
         return os.path.abspath(os.path.expanduser(uri))
     if parsed.scheme == "mtp":
         path = _ruta_gvfs(uri)
         if not path:
-            raise ValueError(
-                f"No se pudo acceder a «{uri}»: hace falta gvfs-fuse "
-                "(sudo apt install gvfs-fuse) y el dispositivo montado"
-            )
+            raise ValueError(formato("errores.mtp_sin_gvfs", uri=uri))
         return path
     if parsed.scheme != "file":
-        raise ValueError(f"Solo se admiten rutas locales o mtp://, no «{uri}»")
+        raise ValueError(formato("errores.solo_local", uri=uri))
     path = urllib.parse.unquote(parsed.path)
     if parsed.netloc and parsed.netloc not in ("", "localhost"):
         path = f"//{parsed.netloc}{path}"
     if not path:
-        raise ValueError(f"URI no válida: {uri}")
+        raise ValueError(formato("errores.uri_invalida", uri=uri))
     return path
 
 
@@ -165,9 +164,14 @@ def resumen_origenes(origenes, maximo: int = 3) -> str:
     if not origenes:
         return ""
     if len(origenes) == 1:
-        return f"Desde {short_path(origenes[0])}"
+        return formato("ventana.desde", ruta=short_path(origenes[0]))
     lista = ", ".join(short_path(p) for p in origenes[:maximo])
     extra = len(origenes) - maximo
     if extra > 0:
-        lista += f" y {extra} más"
-    return f"{len(origenes)} elementos desde {os.path.dirname(short_path(origenes[0]))}: {lista}"
+        lista += " " + formato("ventana.y_mas", n=extra)
+    return formato(
+        "ventana.varios_origenes",
+        n=len(origenes),
+        carpeta=os.path.dirname(short_path(origenes[0])),
+        lista=lista,
+    )
