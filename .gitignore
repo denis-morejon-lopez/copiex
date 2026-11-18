@@ -1,3 +1,5 @@
 copiex_*.deb
 packaging/build/
 packaging/cache/
+__pycache__/
+*.pyc

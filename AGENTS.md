@@ -9,16 +9,20 @@ nombres en inglés** (`sound.py`, `watcher.py`, `nautilus_extension.py`, `copiex
 (`Vigilante`, `cargar()`, `texto()`).
 
 **Antes de tocar nada, lee `TODO.md`** (estado real, requerimiento por requerimiento,
-trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 13 requerimientos y 4 errores;
-los de workers se retiraron el 13/11 y el 12, MTP, se añadió el 16/11).
+trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 14 requerimientos y 4 errores;
+los de workers se retiraron el 13/11, el 12 (MTP) se añadió el 16/11 y el 14 (idioma
+inicial al instalar) el 18/11).
 
 ## Trabajo pendiente
 
-Los 13 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11, y el 13 es
-el selector de idioma, añadido el 17/11), el error 3 (muchos ficheros) está medido y
+Los 14 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11; el 13 es
+el selector de idioma, añadido el 17/11; y el 14 es el idioma inicial según GNOME al
+instalar el `.deb`, añadido el 18/11), el error 3 (muchos ficheros) está medido y
 mejorado, y «Cortar con Copiex» mueve de verdad desde el 16/11. El empaquetado `.deb` y
 `upgrade.sh` están terminados, publicados y documentados en `TODO.md` (3 undevicies y
-3 vicies). El selector de idioma está en la sección 3 duovicies.
+3 vicies). El selector de idioma está en la sección 3 duovicies, el idioma inicial al
+instalar en la 3 tervicies y el diálogo de varios destinos del botón «Nueva copia» en la
+3 quatervicies. Todo está publicado en `repo-copiex/main` y el árbol queda limpio.
 
 **Estado al 17/11/2026:** el **selector de idioma español/inglés** se publicó en
 **`fc04da6`** «Idioma inglés» (`repo-copiex/main`). Después se añadió el aviso a Nautilus
@@ -37,6 +41,14 @@ de Nautilus están confirmados por el usuario; falta confirmar el icono verde en
   `_POR_DEFECTO_EN` en ese módulo y a las dos secciones del YAML. Un cambio en el YAML exige
   **reiniciar la app**; la extensión (fichero suelto) lleva su propio lector de la sección
   `nautilus:` y de `en.nautilus:` y exige instalar el `.deb` (`./upgrade.sh`) + `nautilus -q`.
+- **Idioma inicial:** lo escribe el `postinst` del `.deb` con
+  `packaging/initial-language` (instalado en `/usr/lib/copiex/initial-language`), una vez
+  por cada carpeta de `/home`: `es` si la interfaz GNOME está en español (lo manda
+  `Language=` de `AccountsService`, luego `user-dirs.locale`, el entorno y el idioma del
+  sistema) y `en` en cualquier otro caso. **No pisa una elección previa** (si el fichero
+  ya dice `es` o `en`, no lo toca), así que reinstalar con `./upgrade.sh` respeta lo que
+  el usuario eligió. No metas ese valor por defecto en el código: sin fichero, `menu.py`
+  sigue usando español.
 - **Idioma:** el selector guarda `es`/`en` en `~/.config/copiex/language`; la extensión lee
   ese fichero al construir el menú y, como Nautilus solo pide los ítems al cambiar la
   selección o la vista, vigila esa carpeta con un `Gio.FileMonitor` y emite
@@ -70,10 +82,13 @@ de Nautilus están confirmados por el usuario; falta confirmar el icono verde en
 - **Varios destinos:** la carpeta donde se pulsa «Pegar con Copiex N destinos» es siempre
   el primer destino; los demás se añaden en la ventana de selección. El progreso de la
   operación es el mínimo de los destinos (no la suma) y el de cada destino vive en la tabla
-  `destinos`.
+  `destinos`. Desde el 18/11 la ventana principal crea las mismas operaciones con el botón
+  «Nueva copia»: la carpeta elegida en el selector es el primer destino y
+  `copiex/destinations.py` añade los demás antes de empezar.
 - **Git:** el proyecto tiene repositorio (remoto `repo-copiex` en GitHub). **No hagas
   commit ni push** salvo que el usuario lo pida; y avísale de que la URL del remoto lleva un
-  token incrustado en `.git/config`, que debería rotar.
+  token incrustado en `.git/config`, que debería rotar. Los `__pycache__/*.pyc` no se
+  versionan (`.gitignore` los excluye desde el 18/11); no los vuelvas a añadir.
 
 ## Diagnóstico
 
@@ -122,6 +137,9 @@ Lanzar la GUI desde un terminal sin bloquear:
   `preview.html` con la que se eligió.
 - `copiex/window.py`: además del historial, la cabecera lleva el icono a 22 px justo
   después del título «Copiex» (`Gtk.Box` con `Adw.WindowTitle` + `Gtk.Image`).
+- `copiex/destinations.py`: diálogo «Destinos de la copia» que abre el botón «Nueva copia»
+  tras elegir la primera carpeta; añade más destinos y entrega la lista a
+  `crear_copia` (mismo motor que «Pegar con Copiex N destinos» de Nautilus).
 - `copiex/util.py`: rutas y `icono_disponible()` (icono propio o `edit-copy`).
   `uri_to_path()` acepta `file://` y `mtp://` (este último se resuelve con GIO a la ruta
   de gvfs-fuse); `es_mtp()` y `short_path()` muestran `mtp://…` en la interfaz.
@@ -134,6 +152,9 @@ Lanzar la GUI desde un terminal sin bloquear:
   todos los destinos están `done`; la marca se guarda en la columna `mover`.
 - `copiex/store.py`: historial SQLite, incluida la tabla `destinos` con la cola de cada
   carpeta destino. `copiex/watcher.py`: reanudación automática cada 6 s.
+- `packaging/initial-language`: idioma inicial del usuario al instalar el `.deb` (lee
+  `AccountsService`, `user-dirs.locale`, el entorno y el idioma del sistema; escribe
+  `~/.config/copiex/language`). Lo llama el `postinst`.
 - `copiex/app.py` + `copiex/window.py`: aplicación y ventana del historial; acciones
   `idioma_es`/`idioma_en` y submenú «Idioma» en la ventana. Al cambiar de idioma se
   reconstruye la ventana visible y se refresca el menú del Centinela.

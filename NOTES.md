@@ -30,6 +30,9 @@ esa descripción debe existir en un fichero texto nombrado menu.yaml
 reflejado en ese fichero menu.yaml
 12- Necesitamos que copiex también pueda copiar hacia o desde dispositivos mtp://
 13- La interfaz debe poder cambiar entre español e inglés desde el menú, incluidos los textos de Copiex en Nautilus.
+14- Al instalar el .deb, la aplicación debe tomar el idioma de la interfaz Gnome: español si Gnome
+está en español e inglés si está en cualquier otro idioma. Después el usuario lo puede cambiar
+desde el menú, como ya funciona.
 
 ### Errores detectados
 1- Copiex no detecta la copia que se intenta hacer a través de Nautilus cuando ya está activo en la ventana superior derecha.
@@ -39,16 +42,20 @@ momento de desconexión aparece algún botón para cancelar la copia si se quisi
 4- Cuando Copiex no está en ejecución, y doy clic derecho sobre un archivo y selecciono:  "Copiar con Copiex". Y luego en el dispositivo destino doy clic derecho "¨Pegar con Copiex"
 no veo que active e inicie la aplicación, y debería hacerlo.
 
-### Estado de implementación (17/11/2026)
+### Estado de implementación (18/11/2026)
 
-Los 13 requerimientos y los 4 errores están resueltos y probados. El 16/11 se añadieron el
+Los 14 requerimientos y los 4 errores están resueltos y probados. El 16/11 se añadieron el
 requerimiento 12 (copiar hacia/desde `mtp://`), «Cortar con Copiex» (mueve: copia y borra
 los orígenes al terminar, también con «Pegar con Copiex N destinos») y el icono a color en
 la bandeja (la «C» blanca sobre verde). El 17/11 se añadió el requerimiento 13: selector de
 idioma español/inglés en el menú del Centinela y de la ventana, con preferencia guardada en
 `~/.config/copiex/language` y etiquetas de Nautilus que cambian sin reiniciar (al abrir el
-menú de nuevo). El detalle técnico, las pruebas y el estado exacto al cerrar la sesión
-están en `TODO.md`; las reglas de trabajo, en `AGENTS.md`.
+menú de nuevo). El 18/11 se añadió el requerimiento 14: el `postinst` del `.deb` escribe el
+idioma inicial de cada usuario según la interfaz GNOME (español si está en español, inglés
+en cualquier otro caso) sin pisar una elección previa. El 18/11 se añadió además el
+diálogo «Destinos de la copia» al botón «Nueva copia» de la ventana: permite repartir una
+copia a varias carpetas sin pasar por Nautilus. El detalle técnico, las pruebas y el
+estado exacto al cerrar la sesión están en `TODO.md`; las reglas de trabajo, en `AGENTS.md`.
 
 «Cortar con Copiex» y el cambio de idioma en el menú real de Nautilus están confirmados por
 el usuario (17/11). Queda solo confirmar que el icono del panel es el verde. El código,
@@ -56,8 +63,11 @@ el usuario (17/11). Queda solo confirmar que el icono del panel es el verde. El 
 `upgrade.sh`, `.gitignore` y la retirada de `install.sh` se publicaron después en
 **`ce8d9ee`** (`repo-copiex/main`). El 17/11 se publicó en **`09fb53f`** el arreglo de
 reanudación de copias recuperadas y, después, en **`fc04da6`** «Idioma inglés», el selector
-de idioma. El aviso a Nautilus (`emit_items_updated_signal()` al cambiar de idioma) y esta
-documentación van en el commit de esa corrección, pendiente de push.
+de idioma. El aviso a Nautilus (`emit_items_updated_signal()` al cambiar de idioma), el
+idioma inicial del `.deb`, esta documentación y el diálogo de destinos del botón «Nueva
+copia» se publicaron juntos en el commit del 18/11 («Varios destinos desde la ventana
+principal»), que dejó el árbol limpio. Desde entonces los `__pycache__/*.pyc` ya no se
+versionan.
 
 Desde el 16/11 hay un instalador `.deb` en la raíz del proyecto
 (`copiex_1.0.0_amd64.deb`, generado con `packaging/build-deb.sh`). Incluye las

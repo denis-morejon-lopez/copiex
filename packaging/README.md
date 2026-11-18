@@ -27,6 +27,34 @@ sudo apt install ./copiex_1.0.0_amd64.deb
 - `/usr/share/copiex/offline/`: repositorio APT local con los `.deb` de las
   dependencias (GNOME, Nautilus, MTP, sonido y sus dependencias).
 - `/usr/bin/copiex-dependencias` y `/usr/lib/copiex/instalar-dependencias`.
+- `/usr/lib/copiex/initial-language`: elige el idioma inicial de cada usuario al
+  instalar (lo llama el `postinst`; ver «Idioma inicial»).
+
+## Idioma inicial
+
+Al instalar, el `postinst` recorre `/home/*` y ejecuta `initial-language <casa>`, que
+escribe `~/.config/copiex/language` con `es` si la interfaz GNOME de ese usuario está en
+español y con `en` en cualquier otro caso. El orden de las pistas es:
+
+1. `Language=` del usuario en `/var/lib/AccountsService/users/<usuario>` (lo que se elige
+   en Ajustes → Región e idioma; es el dato real de GNOME);
+2. `~/.config/user-dirs.locale`;
+3. `LC_ALL`/`LC_MESSAGES`/`LANG`/`LANGUAGE` del proceso (`C`, `POSIX` y `C.UTF-8` no
+   cuentan: un `postinst` lanzado por `apt` suele arrastrarlos aunque la sesión esté en
+   español);
+4. `/etc/default/locale`, `/etc/locale.conf` y `localectl status`.
+
+Basta con que el código empiece por `es` (`es`, `es_ES.UTF-8`, `es-AR`, `LANGUAGE=es:en`).
+Si el fichero de idioma ya existe y contiene `es` o `en`, **no se toca**: reinstalar o
+actualizar el paquete (`./upgrade.sh`) respeta lo que el usuario eligió en el menú. Si no
+hay ninguna pista, se pone inglés. Después se cambia con «Idioma» → «Español»/«Inglés»,
+como siempre, y Nautilus lo adopta sin reiniciar.
+
+Se puede probar sin instalar nada (usa una carpeta temporal como casa):
+
+```bash
+COPIEX_ACCOUNTS_DIR=/tmp/cuentas ./packaging/initial-language /tmp/casa
+```
 
 ## Instalación sin Internet
 

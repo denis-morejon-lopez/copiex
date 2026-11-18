@@ -105,6 +105,7 @@ LAUNCHER
 chmod 755 "$CONSTRUIR/usr/bin/copiex"
 install -m 755 "$AQUI/copiex-dependencias" "$CONSTRUIR/usr/bin/copiex-dependencias"
 install -m 755 "$AQUI/instalar-dependencias" "$CONSTRUIR/usr/lib/copiex/instalar-dependencias"
+install -m 755 "$AQUI/initial-language" "$CONSTRUIR/usr/lib/copiex/initial-language"
 printf '%s\n' "${PAQUETES[@]}" >"$CONSTRUIR/usr/share/copiex/paquetes.txt"
 
 echo "== 4/5 metadatos y scripts =="
@@ -158,7 +159,17 @@ Si algo falla o se quiere reintentar:
     sudo copiex-dependencias          # repositorio incluido, sin red
     sudo copiex-dependencias online   # actualizar desde Internet
 
-Si tenías una instalación antigua de usuario con ./install.sh, el postinst aparta la copia
+Idioma
+------
+
+Al instalar, el postinst mira el idioma de la interfaz GNOME de cada usuario
+(Ajustes -> Region e idioma, y como respaldo el idioma de la sesión y del
+sistema) y escribe ~/.config/copiex/language: `es` si esta en espanol y `en` en
+cualquier otro caso. Si el fichero ya existe no se toca, asi que reinstalar o
+actualizar el paquete respeta el idioma elegido. Despues se puede cambiar con
+el menu Idioma -> Espanol/Ingles.
+
+Si tenias una instalacion antigua de usuario con ./install.sh, el postinst aparta la copia
 de ~/.local/share/nautilus-python/extensions/copiex.py (la renombra a
 .guardada-por-copiex-deb) para que Nautilus no cargue dos Copiex y muestre el
 menú duplicado.

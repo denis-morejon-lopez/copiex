@@ -14,6 +14,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 from .engine import ErrorCopia, Motor  # noqa: E402
+from .destinations import DialogoDestinos  # noqa: E402
 from . import __version__  # noqa: E402
 from .ipc import ServidorIpc  # noqa: E402
 from .menu import (  # noqa: E402
@@ -193,7 +194,11 @@ class Aplicacion(Adw.Application):
             return
         if carpeta is None or carpeta.get_path() is None:
             return
-        self.crear_copia(origenes, [carpeta.get_path()])
+        # Mismo ciclo que «Pegar con Copiex N destinos» de Nautilus: la carpeta
+        # elegida es el primer destino y desde ahí se añaden más o se empieza.
+        DialogoDestinos(
+            self.ventana, origenes, self.crear_copia, carpeta.get_path()
+        ).present()
 
     # ------------------------------------------------------------------
     def _cambio_en_hilo_motor(self, op):

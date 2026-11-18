@@ -1,0 +1,88 @@
+#!/bin/sh
+# Idioma inicial de Copiex según el idioma de la interfaz GNOME del usuario.
+#
+# Uso: initial-language <casa>
+#
+# Escribe <casa>/.config/copiex/language con `es` si la interfaz GNOME de ese
+# usuario está en español, y con `en` en cualquier otro caso. Si el usuario ya
+# eligió un idioma (el fichero existe y contiene `es` o `en`), no lo toca: así
+# reinstalar o actualizar el paquete no pisa su elección.
+#
+# Lo llama el postinst del paquete .deb (una vez por cada carpeta de /home).
+# Después el usuario puede cambiarlo desde el menú «Idioma», como siempre.
+set -eu
+
+CASA=${1:-}
+if [ -z "$CASA" ] || [ ! -d "$CASA" ]; then
+    exit 0
+fi
+
+RUTA="$CASA/.config/copiex/language"
+if [ -f "$RUTA" ]; then
+    actual=$(tr -d '[:space:]' <"$RUTA" 2>/dev/null | tr 'A-Z' 'a-z' || true)
+    case "$actual" in
+        es|en) exit 0 ;;
+    esac
+fi
+
+# Lo que no identifica un idioma real no sirve como pista (un postinst lanzado
+# desde apt suele arrastrar LANG=C.UTF-8 aunque la sesión GNOME esté en español).
+valido() {
+    case "$1" in
+        ""|C|POSIX|C.UTF-8|C.UTF8|C.utf8|C.utf-16) echo "" ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+USUARIO=$(stat -c %U "$CASA" 2>/dev/null || true)
+VALOR=""
+
+# 1. Idioma elegido en Ajustes → Región e idioma (lo guarda AccountsService por
+#    usuario; es el dato real de la interfaz GNOME, no el del entorno de root).
+CUENTAS="${COPIEX_ACCOUNTS_DIR:-/var/lib/AccountsService/users}/$USUARIO"
+if [ -n "$USUARIO" ] && [ -r "$CUENTAS" ]; then
+    VALOR=$(valido "$(sed -n 's/^Language=//p' "$CUENTAS" | head -n 1)")
+fi
+
+# 2. Idioma con el que se crearon las carpetas de inicio de sesión.
+if [ -z "$VALOR" ] && [ -r "$CASA/.config/user-dirs.locale" ]; then
+    VALOR=$(valido "$(head -n 1 "$CASA/.config/user-dirs.locale" 2>/dev/null || true)")
+fi
+
+# 3. Entorno del proceso (sirve si la instalación se lanza desde la sesión).
+if [ -z "$VALOR" ]; then
+    for variable in LC_ALL LC_MESSAGES LANG LANGUAGE; do
+        eval "candidato=\${$variable:-}"
+        VALOR=$(valido "$candidato")
+        [ -n "$VALOR" ] && break
+    done
+fi
+
+# 4. Idioma del sistema, por si no hay nada por usuario.
+if [ -z "$VALOR" ]; then
+    for fichero in /etc/default/locale /etc/locale.conf; do
+        [ -r "$fichero" ] || continue
+        VALOR=$(valido "$(sed -n 's/^LANG=//p' "$fichero" | head -n 1)")
+        [ -n "$VALOR" ] && break
+    done
+fi
+if [ -z "$VALOR" ] && command -v localectl >/dev/null 2>&1; then
+    VALOR=$(valido "$(localectl status 2>/dev/null | sed -n 's/.*LANG=//p' | head -n 1)")
+fi
+
+# `es_ES.UTF-8`, `es-AR`, `es_ES:en` y `es` cuentan como español; el resto
+# (incluido no haber encontrado nada) se queda en inglés.
+PREFIJO=$(printf '%s' "$VALOR" | sed 's/[_.:@-].*//' | tr 'A-Z' 'a-z')
+IDIOMA=en
+case "$PREFIJO" in
+    es|spa) IDIOMA=es ;;
+esac
+
+mkdir -p "$CASA/.config/copiex"
+printf '%s\n' "$IDIOMA" >"$RUTA"
+
+# Al ejecutarse como root, el fichero debe quedar del dueño de la casa.
+DUENO=$(stat -c '%u:%g' "$CASA")
+chown -R "$DUENO" "$CASA/.config/copiex" 2>/dev/null || true
+
+printf '%s\n' "$IDIOMA"

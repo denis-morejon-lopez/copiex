@@ -61,6 +61,19 @@ for casa in /home/*; do
     fi
 done
 
+# Idioma inicial de la aplicación según la interfaz GNOME de cada usuario: en
+# español si la sesión está en español y en inglés en cualquier otro caso. No
+# pisa una elección previa (reinstalar o actualizar no cambia el idioma).
+for casa in /home/*; do
+    [ -d "$casa" ] || continue
+    if [ -x /usr/lib/copiex/initial-language ]; then
+        idioma=$(/usr/lib/copiex/initial-language "$casa" 2>/dev/null || true)
+        if [ -n "$idioma" ]; then
+            printf 'Copiex: idioma de la interfaz de %s: %s\n' "$(basename "$casa")" "$idioma"
+        fi
+    fi
+done
+
 mkdir -p /var/lib/copiex /var/log
 
 # systemd-run deja el trabajo fuera del proceso de dpkg y sobrevive a que apt

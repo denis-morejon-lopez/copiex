@@ -80,6 +80,16 @@ _POR_DEFECTO = {
     "dialogos": {
         "origen_titulo": "¿Qué quieres copiar?",
         "destino_titulo": "¿Dónde quieres copiarlo?",
+        "destinos_titulo": "Destinos de la copia",
+        "destinos_ayuda": (
+            "La primera carpeta ya está añadida. Añade más destinos si quieres "
+            "repartir la copia; el origen se lee una sola vez."
+        ),
+        "anadir_destino": "Añadir otra carpeta",
+        "empezar_copia": "Comenzar la copia",
+        "elegir_destino_titulo": "¿Qué otra carpeta quieres como destino?",
+        "quitar_destino": "Quitar este destino",
+        "sin_destinos": "Añade al menos una carpeta de destino.",
     },
     "nautilus": {
         "copiar": "Copiar con Copiex",
@@ -210,6 +220,16 @@ _POR_DEFECTO_EN = {
     "dialogos": {
         "origen_titulo": "What do you want to copy?",
         "destino_titulo": "Where do you want to copy it?",
+        "destinos_titulo": "Copy destinations",
+        "destinos_ayuda": (
+            "The first folder is already added. Add more destinations if you "
+            "want to split the copy; the source is read only once."
+        ),
+        "anadir_destino": "Add another folder",
+        "empezar_copia": "Start copying",
+        "elegir_destino_titulo": "What other folder do you want as destination?",
+        "quitar_destino": "Remove this destination",
+        "sin_destinos": "Add at least one destination folder.",
     },
     "nautilus": {
         "copiar": "Copy with Copiex",
