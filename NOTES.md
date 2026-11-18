@@ -65,8 +65,8 @@ el usuario (17/11). Queda solo confirmar que el icono del panel es el verde. El 
 reanudación de copias recuperadas y, después, en **`fc04da6`** «Idioma inglés», el selector
 de idioma. El aviso a Nautilus (`emit_items_updated_signal()` al cambiar de idioma), el
 idioma inicial del `.deb`, esta documentación y el diálogo de destinos del botón «Nueva
-copia» se publicaron juntos en el commit del 18/11 («Varios destinos desde la ventana
-principal»), que dejó el árbol limpio. Desde entonces los `__pycache__/*.pyc` ya no se
+copia» se publicaron juntos en el commit del 18/11 **`cca1b2c`** («Varios destinos desde la
+ventana principal»), que dejó el árbol limpio. Desde entonces los `__pycache__/*.pyc` ya no se
 versionan.
 
 Desde el 16/11 hay un instalador `.deb` en la raíz del proyecto

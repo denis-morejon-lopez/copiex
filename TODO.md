@@ -69,8 +69,8 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
 
 ### Estado actual al retomar (18/11/2026)
 
-- **Git:** árbol limpio y todo publicado en `repo-copiex/main`: el último commit es el de
-  esta sesión («Varios destinos desde la ventana principal»), que incluye el aviso a
+- **Git:** árbol limpio y todo publicado en `repo-copiex/main`: el último commit es
+  **`cca1b2c`** «Varios destinos desde la ventana principal», que incluye el aviso a
   Nautilus del cambio de idioma, el idioma inicial del `.deb`, el diálogo de destinos y su
   documentación (antes, `fc04da6` «Idioma inglés», `09fb53f` y `ce8d9ee`). El `.deb` de
   60 MB no se versiona, y desde el 18/11 tampoco los `__pycache__/*.pyc` (están en
