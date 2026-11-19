@@ -163,6 +163,12 @@ Lanzar la GUI desde un terminal sin bloquear:
   sustituye ese fichero, no el código. «Eliminar» solo oculta la fila, nunca borra el
   historial.
 - `copiex/tray.py`: icono de bandeja (StatusNotifierItem) con submenú de idioma.
+  Publica `IconPixmap` (ARGB32, alfa premultiplicado) además de `IconName`, y deja el
+  nombre vacío cuando hay mapa de bits: sin él, la extensión AppIndicator 57 de Ubuntu
+  24.04 falla al resolver el icono por el tema (`iconCache.js` llama a `oldIcon.equals`,
+  que no existe en `Gio.Icon`) y el panel muestra tres puntos (`image-loading-symbolic`).
+  No quites el mapa de bits ni vuelvas a declarar `IconPixmap` como `aa(iiay)`: la spec
+  de SNI y el panel esperan `a(iiay)`.
   `copiex/ipc.py`: socket Unix.
 - `copiex/nautilus_extension.py`: extensión de Nautilus (menú con «Copiar» y «Cortar»,
   portapapeles con cabecera `copy`/`cut`, arranque y el ciclo de «Pegar con Copiex N

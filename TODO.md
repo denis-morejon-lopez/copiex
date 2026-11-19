@@ -597,6 +597,41 @@ barrita; ahora `Bandeja.ICONO` es `com.copiex.Manager` y la consulta D-Bus devue
 icono a color (tooltip incluido). La app rearrancada en bandeja no da errores. El aspecto
 en el panel y en el dock no se ha podido ver desde aquí (Wayland): lo mira el usuario.
 
+### Los tres puntos en Ubuntu 24.04 (19/11)
+
+En 24.04 el panel mostraba **tres puntos** en lugar del icono. Son
+`image-loading-symbolic`, el icono de reserva de la extensión AppIndicator 57, que fallaba
+al cargar el nuestro:
+
+```
+copiex unable to update icon: TypeError: oldIcon.equals is not a function
+  add@…/iconCache.js:52 ← _cacheOrCreateIconByName ← _createIcon ← _createAndSetIcon
+```
+
+`Gio.Icon` expone `equal()`, no `equals()`: el fallo salta cuando se pide el mismo icono
+dos veces mientras se carga, y nuestro SVG se resuelve de forma asíncrona, así que da
+tiempo a la segunda petición. El icono y el tema estaban bien
+(`has_icon("com.copiex.Manager")` es True e `IconName` se publicaba correcto).
+
+**Arreglo (`copiex/tray.py`):** la bandeja publica también `IconPixmap`, el icono
+rasterizado con GdkPixbuf a 16/22/24/32/48/64 px en ARGB32 de orden de red y alfa
+premultiplicado, que es lo que espera el panel (`Cogl.PixelFormat.ARGB_8888`). Cuando hay
+mapas de bits, `IconName` va **vacío a propósito** para que el panel no pase por la caché
+defectuosa; si no se puede rasterizar (falta el cargador de SVG) se publica solo el
+nombre, como antes. Cuesta ~8 ms al crear la bandeja y no añade dependencias:
+`gir1.2-gdkpixbuf-2.0` ya viene con `gir1.2-gtk-4.0`. A `packaging/deps.txt` sí se añadió
+`librsvg2-common`, que es el cargador de SVG, para que el repositorio offline lo traiga.
+
+También se corrigió el XML de la interfaz: `IconPixmap`, `AttentionIconPixmap` y
+`OverlayIconPixmap` declaraban `aa(iiay)` (un nivel de más) y la spec de SNI espera
+`a(iiay)`; con el tipo equivocado el panel respondía «No se pudo obtener la propiedad».
+
+Comprobado el 19/11 en 24.04 con la app en bandeja: `IconName` = `''`, `IconPixmap`
+devuelve los seis tamaños con sus bytes, el registro de GNOME Shell ya no muestra
+`unable to update icon` ni `Impossible to create image from data`, y el mapa de bits
+reconstruido a PNG sale con la «C» blanca sobre verde (verde `#34a37e`). **Falta la
+confirmación visual del usuario en el panel.**
+
 ## 3 quindecies. Copia a varios destinos en una sola lectura (13/11)
 
 Una copia puede repartirse a varias carpetas destino **leyendo el origen una vez**. Sigue
@@ -1089,7 +1124,8 @@ motor de varios destinos sí estaba probado desde el 13/11 (3 quindecies).
 
 No hay trabajo pendiente del pliego. El usuario confirmó el 17/11 el menú real de Nautilus
 (cortar a uno y a varios destinos y cambio de idioma); queda confirmar que el icono del
-panel es el verde, probar el idioma inicial con una instalación real del `.deb` (3
+panel se ve bien en 24.04 (los tres puntos se arreglaron el 19/11 con `IconPixmap`, ver el
+final de 3 quaterdecies), probar el idioma inicial con una instalación real del `.deb` (3
 tervicies) y, si se quiere afinar, mover carpetas vacías y mover hacia/desde MTP.
 
 ## 5. Trampas del entorno (ahorran media hora cada una)
