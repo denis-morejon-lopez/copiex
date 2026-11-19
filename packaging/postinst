@@ -20,14 +20,33 @@ fi
 
 MODO=local
 
+# Versión de Ubuntu y qué toca hacer en ella: repositorio offline propio, API
+# de Nautilus y versiones de GTK/libadwaita. Lo centraliza plataforma.sh, que
+# también usa el instalador de dependencias.
+. /usr/lib/copiex/plataforma.sh
+copiex_describe_plataforma
+
+hay_internet() {
+    timeout 4 getent hosts archive.ubuntu.com >/dev/null 2>&1
+}
+
 elegir_modo() {
     case "${COPIEX_ACTUALIZAR:-auto}" in
         si|sí|s|yes|y|true|1) echo actualizar; return ;;
         no|n|false|0) echo local; return ;;
     esac
     # Sin Internet solo se puede usar el paquete offline.
-    if ! timeout 4 getent hosts archive.ubuntu.com >/dev/null 2>&1; then
+    if ! hay_internet; then
         echo local
+        return
+    fi
+    # El paquete no trae el repositorio de esta versión de Ubuntu: no se
+    # pregunta, porque el local no serviría.
+    if [ "$COPIEX_TRAE_REPO" = no ]; then
+        printf '\nCopiex: el paquete no trae las dependencias para Ubuntu %s.\n' \
+            "$COPIEX_VERSION_UBUNTU" >&2
+        printf 'Se usarán los repositorios de Ubuntu (hace falta Internet).\n' >&2
+        echo actualizar
         return
     fi
     # La pregunta solo tiene sentido si hay una terminal interactiva. Con un
@@ -90,6 +109,11 @@ fi
 
 printf '\nCopiex instalado. Las dependencias se están preparando en segundo plano.\n'
 printf 'Puedes seguir el progreso en /var/log/copiex-dependencias.log.\n'
+if [ "$COPIEX_TRAE_REPO" = no ]; then
+    printf 'Este paquete no incluye dependencias para Ubuntu %s: se instalan desde Internet.\n' \
+        "$COPIEX_VERSION_UBUNTU"
+    printf 'Si falla, ejecuta: sudo copiex-dependencias online\n'
+fi
 printf 'Si usas Nautilus, reinícialo para cargar el menú: nautilus -q\n'
 
 exit 0

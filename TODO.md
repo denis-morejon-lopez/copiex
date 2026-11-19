@@ -824,24 +824,41 @@ Nautilus sobre una carpeta del teléfono; eso queda para la prueba del usuario.
 ## 3 undevicies. Paquete .deb con dependencias offline (16/11)
 
 En `packaging/` hay un empaquetado completo que genera
-`copiex_1.0.0_amd64.deb` en la raíz del proyecto (unos 60 MB).
+`copiex_1.0.0_amd64.deb` en la raíz del proyecto (unos 122 MB: trae las
+dependencias de Ubuntu 24.04 y de Ubuntu 26.04).
 
 - **Instalación:** el `.deb` solo declara `Depends: python3`, así que `apt`/`dpkg`
   instalan Copiex aunque falten GTK, libadwaita, Nautilus o gvfs. La aplicación queda en
   `/opt/copiex`, con lanzador `/usr/bin/copiex`, escritorio, iconos, servicio D-Bus y
   extensión de Nautilus en `/usr/share/nautilus-python/extensions/copiex.py`.
-- **Dependencias:** `packaging/deps.txt` lista los paquetes necesarios; `resolver.py`
-  calcula sus dependencias (2 niveles por defecto) y `build-deb.sh` descarga los `.deb`
-  de la misma versión de Ubuntu, crea un repositorio APT local en
-  `/usr/share/copiex/offline` (183 paquetes, 60 MB) y lo mete en el paquete.
+- **Dependencias:** `packaging/deps.txt` lista los paquetes necesarios (con alternativas
+  «a | b» para lo que cambia de nombre entre versiones, como
+  `gir1.2-nautilus-4.1 | gir1.2-nautilus-4.0`); `resolver.py` calcula sus dependencias
+  (2 niveles por defecto) y `build-deb.sh` descarga los `.deb` de **cada** versión de
+  Ubuntu y deja un repositorio APT por versión en `/usr/share/copiex/offline/ubuntu-24.04`
+  y `…/ubuntu-26.04` (182 y 183 paquetes, ~64 y ~60 MB). `COPIEX_SUITES="noble
+  resolute"` elige qué suites se descargan (por defecto las dos LTS).
+- **Versión de Ubuntu:** `packaging/plataforma.sh` (instalado en
+  `/usr/lib/copiex/plataforma.sh`) detecta el sistema y lo usan el `postinst` y
+  `instalar-dependencias`: 24.04 → repositorio de 24.04 y typelib
+  `gir1.2-nautilus-4.0` (Nautilus 46, GTK 4.14, libadwaita 1.5); 26.04 →
+  repositorio de 26.04 y typelib `gir1.2-nautilus-4.1` (Nautilus 50, GTK 4.22,
+  libadwaita 1.8); otra versión → sin repositorio incluido, se resuelve por
+  Internet con la typelib que ofrezca apt. Al terminar se comprueba la typelib y
+  la versión de Nautilus, y queda en `/var/lib/copiex/entorno`. La detección se
+  prueba con `COPIEX_OS_RELEASE=<fichero os-release>`.
 - **Sin Internet:** el `postinst` lanza `/usr/lib/copiex/instalar-dependencias` en segundo
   plano (durante el postinst dpkg mantiene el candado), que añade una fuente temporal
-  `file:/usr/share/copiex/offline`, actualiza solo sus listas y instala lo que falte.
-  Queda en `/var/log/copiex-dependencias.log`; `sudo copiex-dependencias` reintenta.
+  `file:/usr/share/copiex/offline/ubuntu-<versión del sistema>`, actualiza solo sus listas
+  y instala lo que falte. Queda en `/var/log/copiex-dependencias.log`;
+  `sudo copiex-dependencias` reintenta. Si el paquete no trae el repositorio de esa
+  versión de Ubuntu, lo dice y remite a `sudo copiex-dependencias online`.
 - **Con Internet:** si hay terminal interactiva y conexión, el `postinst` pregunta
   «¿Actualizar los paquetes necesarios desde Internet…? [S/n]». Si se acepta, el helper
-  hace `apt-get update` e instala/actualiza desde Ubuntu; si falla, cae al repositorio
-  local. `COPIEX_ACTUALIZAR=si|no` evita la pregunta.
+  hace `apt-get update` e instala/actualiza los paquetes **directos** de `deps.txt`,
+  dejando que apt los resuelva con los repositorios de la versión instalada (la lista
+  completa incrustada es de otra serie y pediría paquetes incompatibles); si falla, cae al
+  repositorio local. `COPIEX_ACTUALIZAR=si|no` evita la pregunta.
 - **Migración:** si existía la extensión de usuario de `install.sh`, el `postinst` la
   renombra a `.guardada-por-copiex-deb` para que Nautilus no cargue dos Copiex y muestre
   el menú duplicado.
@@ -851,7 +868,10 @@ En `packaging/` hay un empaquetado completo que genera
   aunque la versión no cambie. No se ejecuta con sudo. Después hay que reiniciar Nautilus
   (`nautilus -q`).
 - **Construcción:** `./packaging/build-deb.sh` (necesita Internet y `dpkg-dev`).
-  `COPIEX_DEPS_NIVEL` y `COPIEX_ARQ` permiten cambiar niveles y arquitectura.
+  `COPIEX_DEPS_NIVEL`, `COPIEX_ARQ` y `COPIEX_SUITES` permiten cambiar niveles,
+  arquitectura y versiones de Ubuntu incluidas. Cada suite usa listas de apt propias
+  (`packaging/cache/apt-<suite>`), así se puede construir en 24.04 un paquete que sirve
+  también en 26.04.
 - **`install.sh` retirado:** el `.deb` cubre la instalación y `upgrade.sh` la actualización.
   `uninstall.sh` queda solo para limpiar instalaciones antiguas de usuario.
 
@@ -866,9 +886,10 @@ probado en una máquina sin las dependencias; la pregunta interactiva tampoco se
 ver con un `apt install` real. `upgrade.sh` no se ha ejecutado de extremo a extremo porque
 actualiza paquetes del sistema y requiere root.
 
-Limitaciones: el repositorio es específico de la arquitectura y de la versión de Ubuntu
-con la que se construye; `menu.yaml` en `/opt` lo gestiona el paquete y una actualización
-puede reemplazarlo.
+Limitaciones: el repositorio es específico de la arquitectura; lleva dependencias offline
+de Ubuntu 24.04 y 26.04, y en otra versión de Ubuntu el paquete se instala pero resuelve
+sus dependencias por Internet. `menu.yaml` en `/opt` lo gestiona el paquete y una
+actualización puede reemplazarlo.
 
 ## 3 vicies. `upgrade.sh`, `.gitignore` y publicación (16/11)
 

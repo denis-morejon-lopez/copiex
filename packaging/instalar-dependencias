@@ -2,8 +2,14 @@
 # Instala las dependencias de Copiex.
 #
 # Uso:  instalar-dependencias [actualizar|local]
-#   actualizar: usa los repositorios de Ubuntu (requiere Internet).
-#   local:      usa el repositorio APT incluido en /usr/share/copiex/offline.
+#   actualizar: usa los repositorios de Ubuntu (requiere Internet) y resuelve
+#               las dependencias con los paquetes de esta versión del sistema.
+#   local:      usa el repositorio APT que el paquete trae para esta versión de
+#               Ubuntu (/usr/share/copiex/offline/ubuntu-<versión>).
+#
+# La versión de Ubuntu se detecta en /usr/lib/copiex/plataforma.sh, que dice
+# también qué API de Nautilus corresponde (4.0 en 24.04, 4.1 en 26.04) y qué
+# repositorio hay que usar.
 #
 # Se ejecuta desde el postinst en segundo plano (dpkg aún tiene el candado) y
 # desde /usr/bin/copiex-dependencias a mano. Nunca interrumpe la instalación de
@@ -12,30 +18,84 @@ set -u
 
 MODO=${1:-local}
 REGISTRO=/var/log/copiex-dependencias.log
-LISTA=/usr/share/copiex/paquetes.txt
+DIRECTAS=/usr/share/copiex/deps.txt
+SUITES=/usr/share/copiex/suites
 ESTADO=/var/lib/copiex/estado
+ENTORNO=/var/lib/copiex/entorno
 
 mkdir -p /var/lib/copiex /var/lib/copiex/lists
 exec >>"$REGISTRO" 2>&1
 echo
 echo "== $(date '+%Y-%m-%d %H:%M:%S') instalando dependencias (modo $MODO) =="
 
+# Versión de Ubuntu y qué toca hacer en ella.
+if . /usr/lib/copiex/plataforma.sh 2>/dev/null; then
+    copiex_describe_plataforma
+else
+    # Instalación a medias de una versión anterior del paquete: se deduce lo
+    # mínimo para poder repararla.
+    COPIEX_VERSION_UBUNTU=$(
+        . /etc/os-release
+        printf '%s' "${VERSION_ID:-}"
+    )
+    COPIEX_SUITE=""
+    COPIEX_NAUTILUS_API=""
+    COPIEX_REPO_OFFLINE=/usr/share/copiex/offline/ubuntu-$COPIEX_VERSION_UBUNTU
+    COPIEX_TRAE_REPO=no
+    [ -d "$COPIEX_REPO_OFFLINE" ] && COPIEX_TRAE_REPO=si
+    echo "AVISO: no se pudo leer /usr/lib/copiex/plataforma.sh"
+fi
+
 export DEBIAN_FRONTEND=noninteractive
 export LC_ALL=C.UTF-8
 CANDADO="-o DPkg::Lock::Timeout=900"
 
-if [ ! -r "$LISTA" ]; then
-    echo "ERROR: falta $LISTA"
-    echo "error" >"$ESTADO"
-    exit 1
+LISTA="$COPIEX_REPO_OFFLINE/paquetes.txt"
+if [ "$COPIEX_TRAE_REPO" = no ]; then
+    echo "el paquete no trae el repositorio de Ubuntu $COPIEX_VERSION_UBUNTU"
+    if [ -r "$SUITES" ]; then
+        echo "versiones incluidas: $(tr '\n' ' ' <"$SUITES")"
+    fi
 fi
-PAQUETES=$(grep -v '^[[:space:]]*#' "$LISTA" | grep -v '^[[:space:]]*$' | tr '\n' ' ')
 
 fallan() {
     echo "ERROR: no se pudieron instalar todas las dependencias."
     echo "       Revisa este registro o ejecuta: sudo copiex-dependencias local"
     echo "error" >"$ESTADO"
     exit 1
+}
+
+PAQUETES=""
+if [ "$COPIEX_TRAE_REPO" = si ]; then
+    if [ ! -r "$LISTA" ]; then
+        echo "ERROR: falta $LISTA"
+        echo "error" >"$ESTADO"
+        exit 1
+    fi
+    PAQUETES=$(grep -v '^[[:space:]]*#' "$LISTA" | grep -v '^[[:space:]]*$' | tr '\n' ' ')
+fi
+
+# Una línea de deps.txt puede ofrecer alternativas «a | b»: se devuelve la
+# primera que conozcan los repositorios de este sistema (y, si no hay listas de
+# apt todavía, la primera a secas para que apt dé un error comprensible).
+elegir_paquete() {
+    resto=$1
+    primera=""
+    while [ -n "$resto" ]; do
+        alternativa=${resto%%|*}
+        case "$resto" in
+            *'|'*) resto=${resto#*|} ;;
+            *) resto="" ;;
+        esac
+        alternativa=$(printf '%s' "$alternativa" | tr -d '[:space:]')
+        [ -n "$alternativa" ] || continue
+        [ -n "$primera" ] || primera=$alternativa
+        if apt-cache show "$alternativa" >/dev/null 2>&1; then
+            printf '%s' "$alternativa"
+            return 0
+        fi
+    done
+    printf '%s' "$primera"
 }
 
 # Solo se instalan los paquetes que falten: así una instalación offline no
@@ -51,12 +111,18 @@ faltan() {
 }
 
 instalar_local() {
-    echo "-- usando el repositorio incluido en /usr/share/copiex/offline"
+    if [ "$COPIEX_TRAE_REPO" = no ]; then
+        echo "AVISO: el paquete no incluye dependencias para Ubuntu $COPIEX_VERSION_UBUNTU."
+        echo "       Hacen falta los repositorios de Ubuntu; ejecuta:"
+        echo "       sudo copiex-dependencias online"
+        fallan
+    fi
+    echo "-- usando el repositorio incluido para Ubuntu $COPIEX_VERSION_UBUNTU"
     FUENTE=/var/lib/copiex/copiex-offline.list
-    printf 'deb [trusted=yes] file:/usr/share/copiex/offline ./\n' >"$FUENTE"
+    printf 'deb [trusted=yes] file:%s ./\n' "$COPIEX_REPO_OFFLINE" >"$FUENTE"
     OPCIONES="-o Dir::Etc::sourcelist=$FUENTE -o Dir::Etc::sourceparts=- \
 -o Dir::State::lists=/var/lib/copiex/lists -o APT::Get::List-Cleanup=0 \
--o Acquire::Retries=0 -o APT::Get::AllowDowngrades=false"
+-o Acquire::Retries=0 -o Acquire::Languages=none -o APT::Get::AllowDowngrades=false"
     # shellcheck disable=SC2086
     apt-get $OPCIONES $CANDADO update || fallan
     FALTAN=$(faltan)
@@ -71,12 +137,75 @@ instalar_local() {
     rm -f "$FUENTE"
 }
 
+# Lista de paquetes directos (sin resolver) de deps.txt, eligiendo en cada línea
+# la alternativa que exista aquí. Se resuelve con los repositorios del sistema,
+# no con la lista completa incrustada al construir el paquete: esa lista es de
+# la versión de Ubuntu del build y en otra serie pide paquetes incompatibles
+# (por ejemplo python3.14 o glib 2.88 en 24.04).
+lista_directa() {
+    if [ ! -r "$DIRECTAS" ]; then
+        printf '%s' "$PAQUETES"
+        return
+    fi
+    while IFS= read -r linea; do
+        case "$linea" in ''|'#'*) continue ;; esac
+        linea=${linea%%#*}
+        nombre=$(elegir_paquete "$linea")
+        [ -n "$nombre" ] || continue
+        printf '%s ' "$nombre"
+    done <"$DIRECTAS"
+}
+
 instalar_online() {
     echo "-- usando los repositorios de Ubuntu (Internet)"
     apt-get $CANDADO update || return 1
+    PAQUETES_ONLINE=$(lista_directa)
+    if [ -z "$PAQUETES_ONLINE" ]; then
+        echo "ERROR: no hay paquetes que instalar (revisa $DIRECTAS)."
+        return 1
+    fi
+    # La typelib de Nautilus se llama distinto en cada versión de Ubuntu: se pide
+    # explícitamente la de esta (4.0 en 24.04, 4.1 en 26.04).
+    if [ -n "$COPIEX_NAUTILUS_API" ]; then
+        case " $PAQUETES_ONLINE " in
+            *" gir1.2-nautilus-$COPIEX_NAUTILUS_API "*)
+                ;;
+            *)
+                PAQUETES_ONLINE="$PAQUETES_ONLINE gir1.2-nautilus-$COPIEX_NAUTILUS_API"
+                ;;
+        esac
+    fi
+    echo "paquetes: $PAQUETES_ONLINE"
     # En línea sí se actualizan también los que ya estén instalados.
     # shellcheck disable=SC2086
-    apt-get $CANDADO install -y --no-install-recommends $PAQUETES || return 1
+    apt-get $CANDADO install -y --no-install-recommends $PAQUETES_ONLINE || return 1
+}
+
+# Lo que depende de la versión: la typelib de Nautilus de esta Ubuntu y el
+# Nautilus instalado. Queda en el registro y en /var/lib/copiex/entorno.
+verificar_plataforma() {
+    {
+        printf '%s %s\n' "$COPIEX_VERSION_UBUNTU" "${COPIEX_SUITE:--}"
+        printf 'api_nautilus %s\n' "${COPIEX_NAUTILUS_API:--}"
+        printf 'repo_incluido %s\n' "$COPIEX_TRAE_REPO"
+    } >"$ENTORNO" 2>/dev/null || true
+
+    if [ -z "$COPIEX_NAUTILUS_API" ]; then
+        echo "extensión de Nautilus: versión de Ubuntu no reconocida; se usará la API que haya"
+        return 0
+    fi
+    paquete="gir1.2-nautilus-$COPIEX_NAUTILUS_API"
+    estado=$(dpkg-query -W -f='${Status}' "$paquete" 2>/dev/null || true)
+    if [ "$estado" = "install ok installed" ]; then
+        echo "extensión de Nautilus: $paquete instalado (API $COPIEX_NAUTILUS_API)"
+    else
+        echo "AVISO: falta $paquete; el menú de Copiex no aparecerá en Nautilus."
+    fi
+    nautilus=$(dpkg-query -W -f='${Version}' nautilus 2>/dev/null || true)
+    if [ -n "$nautilus" ]; then
+        echo "Nautilus instalado: $nautilus (se esperaba la serie $COPIEX_NAUTILUS_MIN)"
+    fi
+    return 0
 }
 
 case "$MODO" in
@@ -90,6 +219,8 @@ case "$MODO" in
         instalar_local
         ;;
 esac
+
+verificar_plataforma
 
 echo "ok" >"$ESTADO"
 echo "== $(date '+%Y-%m-%d %H:%M:%S') dependencias listas =="

@@ -35,11 +35,6 @@ if [ ! -f "$DIR/packaging/deps.txt" ] || [ ! -x "$DIR/packaging/build-deb.sh" ];
 fi
 
 DEPS="$DIR/packaging/deps.txt"
-DIRECTAS=$(sed -e 's/#.*//' "$DEPS" | tr '\n' ' ' | sed -e 's/^ *//' -e 's/ *$//')
-if [ -z "$DIRECTAS" ]; then
-    echo "ERROR: $DEPS está vacío." >&2
-    exit 1
-fi
 
 export LC_ALL=C.UTF-8
 
@@ -55,9 +50,13 @@ NIVEL=${COPIEX_DEPS_NIVEL:-2}
 # El cierre completo es el mismo que acaba en el repositorio offline del .deb:
 # se actualizan las que ya están instaladas y luego se asegura que las directas
 # estén presentes (apt instala las que falten con sus dependencias).
-PAQUETES=$(python3 "$DIR/packaging/resolver.py" "$NIVEL" $DIRECTAS)
-if [ -z "$PAQUETES" ]; then
-    echo "ERROR: no se pudieron resolver las dependencias." >&2
+# Se lee el fichero desde resolver.py: así las alternativas «a | b» de una línea
+# no se parten al expandir la lista en el shell, y cada paquete se resuelve con
+# los repositorios de esta versión de Ubuntu.
+PAQUETES=$(python3 "$DIR/packaging/resolver.py" --archivo "$DEPS" "$NIVEL")
+DIRECTAS=$(python3 "$DIR/packaging/resolver.py" --archivo "$DEPS" --directas)
+if [ -z "$PAQUETES" ] || [ -z "$DIRECTAS" ]; then
+    echo "ERROR: no se pudieron resolver las dependencias ($DEPS)." >&2
     exit 1
 fi
 # shellcheck disable=SC2086
