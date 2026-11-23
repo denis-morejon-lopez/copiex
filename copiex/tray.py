@@ -30,9 +30,12 @@ SNI_XML = """
     <property name="AttentionIconName" type="s" access="read"/>
     <property name="Status" type="s" access="read"/>
     <property name="WindowId" type="u" access="read"/>
-    <property name="IconPixmap" type="aa(iiay)" access="read"/>
-    <property name="AttentionIconPixmap" type="aa(iiay)" access="read"/>
-    <property name="OverlayIconPixmap" type="aa(iiay)" access="read"/>
+    <!-- IconPixmap es «a(iiay)»: una lista de mapas de bits, cada uno con su
+         ancho, su alto y los bytes ARGB. Con «aa(iiay)» (un nivel de más) el
+         panel no puede leer la propiedad. -->
+    <property name="IconPixmap" type="a(iiay)" access="read"/>
+    <property name="AttentionIconPixmap" type="a(iiay)" access="read"/>
+    <property name="OverlayIconPixmap" type="a(iiay)" access="read"/>
     <property name="ToolTip" type="(sa(iiay)ss)" access="read"/>
     <property name="Menu" type="o" access="read"/>
     <property name="ContextMenu" type="o" access="read"/>
@@ -111,11 +114,42 @@ DBUSMENU_XML = """
 </node>
 """
 
+# Tamaños del mapa de bits que se publica en IconPixmap. El panel elige el
+# menor que llegue al tamaño que pide (con pantallas HiDPI pide 2× o 3×).
+TAMANOS_PIXMAP = (16, 22, 24, 32, 48, 64)
+
 OCULTAR_ID = 1
 IDIOMA_ID = 2
 ESPANOL_ID = 3
 INGLES_ID = 4
 SALIR_ID = 5
+
+
+def _argb_premultiplicado(pixbuf) -> bytes:
+    """Pixbuf de GdkPixbuf → ARGB32 tal y como lo pide StatusNotifierItem.
+
+    El protocolo pide ARGB en orden de red (A, R, G, B por píxel) y con el alfa
+    premultiplicado, que es lo que espera el panel (`Cogl.PixelFormat.ARGB_8888`).
+    GdkPixbuf entrega RGBA en orden de memoria y sin premultiplicar.
+    """
+    ancho = pixbuf.get_width()
+    alto = pixbuf.get_height()
+    fila = pixbuf.get_rowstride()
+    canales = pixbuf.get_n_channels()
+    datos = pixbuf.get_pixels()
+    salida = bytearray(ancho * alto * 4)
+    destino = 0
+    for y in range(alto):
+        origen = y * fila
+        for x in range(ancho):
+            p = origen + x * canales
+            alfa = datos[p + 3] if canales == 4 else 255
+            salida[destino] = alfa
+            salida[destino + 1] = datos[p] * alfa // 255
+            salida[destino + 2] = datos[p + 1] * alfa // 255
+            salida[destino + 3] = datos[p + 2] * alfa // 255
+            destino += 4
+    return bytes(salida)
 
 
 class Bandeja:
@@ -138,6 +172,11 @@ class Bandeja:
         self._revision = 1
         # Icono propio si está instalado (paquete .deb); si no, el del tema.
         self._icono = self._elegir_icono()
+        # Además del nombre se publica el mapa de bits ya rasterizado: con solo
+        # IconName, la extensión AppIndicator de Ubuntu 24.04 falla al cargarlo
+        # (iconCache.js llama a `oldIcon.equals`, que no existe en un Gio.Icon)
+        # y deja el icono de reserva «image-loading-symbolic»: tres puntos.
+        self._pixmaps = self._calcular_pixmaps()
 
         self.conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         self._nombre = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
@@ -208,6 +247,77 @@ class Bandeja:
         return icono_disponible(self.ICONO)
 
     # ------------------------------------------------------------------
+    # mapa de bits del icono (IconPixmap)
+    # ------------------------------------------------------------------
+    def _rutas_icono(self) -> list[str]:
+        """Rutas candidatas del fichero del icono, en orden de preferencia.
+
+        Primero lo que resuelva el tema de iconos (vale para el .deb y para el
+        icono de reserva) y después las rutas conocidas del proyecto y del
+        paquete. No se comprueba con `os.path.exists`: si una ruta no sirve, la
+        carga falla y se prueba la siguiente. Son rutas del sistema, no de
+        dispositivos del usuario.
+        """
+        rutas: list[str] = []
+        try:
+            gi.require_version("Gtk", "4.0")
+            from gi.repository import Gdk, Gtk
+
+            display = Gdk.Display.get_default()
+            if display is not None:
+                tema = Gtk.IconTheme.get_for_display(display)
+                paintable = tema.lookup_icon(
+                    self._icono,
+                    48,
+                    1,
+                    Gtk.TextDirection.NONE,
+                    Gtk.IconLookupFlags.FORCE_REGULAR,
+                )
+                fichero = paintable.get_file() if paintable is not None else None
+                ruta = fichero.get_path() if fichero is not None else None
+                if ruta:
+                    rutas.append(ruta)
+        except Exception:
+            pass  # sin GTK o sin tema: se prueban las rutas de abajo
+
+        raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for ruta in (
+            os.path.join(raiz, "icons", f"{self._icono}.svg"),
+            f"/usr/share/icons/hicolor/scalable/apps/{self._icono}.svg",
+            f"/opt/copiex/icons/{self._icono}.svg",
+        ):
+            if ruta not in rutas:
+                rutas.append(ruta)
+        return rutas
+
+    def _calcular_pixmaps(self) -> list[tuple[int, int, bytes]]:
+        """IconPixmap: el icono rasterizado a varios tamaños.
+
+        Si no se puede rasterizar (no hay cargador de SVG ni fichero), queda
+        vacío y la bandeja publica solo IconName, como antes.
+        """
+        for ruta in self._rutas_icono():
+            try:
+                return self._pixmaps_de(ruta)
+            except Exception:
+                continue
+        return []
+
+    def _pixmaps_de(self, ruta: str) -> list[tuple[int, int, bytes]]:
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf
+
+        pixmaps = []
+        for tamano in TAMANOS_PIXMAP:
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(ruta, tamano, tamano)
+            pixmaps.append((
+                pixbuf.get_width(),
+                pixbuf.get_height(),
+                _argb_premultiplicado(pixbuf),
+            ))
+        return pixmaps
+
+    # ------------------------------------------------------------------
     # org.kde.StatusNotifierItem
     # ------------------------------------------------------------------
     def _propiedad_sni(self, conn, sender, ruta, interfaz, nombre):
@@ -215,15 +325,18 @@ class Bandeja:
             "Category": GLib.Variant("s", "ApplicationStatus"),
             "Id": GLib.Variant("s", "copiex"),
             "Title": GLib.Variant("s", self._titulo),
-            "IconName": GLib.Variant("s", self._icono),
+            # Con el mapa de bits disponible se deja el nombre vacío: así el
+            # panel no intenta resolverlo por el tema (que es donde falla la
+            # extensión en 24.04) y usa directamente IconPixmap.
+            "IconName": GLib.Variant("s", "" if self._pixmaps else self._icono),
             "IconThemePath": GLib.Variant("s", ""),
             "OverlayIconName": GLib.Variant("s", ""),
             "AttentionIconName": GLib.Variant("s", ""),
             "Status": GLib.Variant("s", "Active"),
             "WindowId": GLib.Variant("u", 0),
-            "IconPixmap": GLib.Variant("aa(iiay)", []),
-            "AttentionIconPixmap": GLib.Variant("aa(iiay)", []),
-            "OverlayIconPixmap": GLib.Variant("aa(iiay)", []),
+            "IconPixmap": GLib.Variant("a(iiay)", self._pixmaps),
+            "AttentionIconPixmap": GLib.Variant("a(iiay)", []),
+            "OverlayIconPixmap": GLib.Variant("a(iiay)", []),
             "ToolTip": GLib.Variant("(sa(iiay)ss)", (
                 self._icono, [], self._titulo, texto("aplicacion.tooltip")
             )),
