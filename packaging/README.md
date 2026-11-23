@@ -14,7 +14,7 @@ inglés» el selector de idioma; el paquete ya incluye `menu.yaml` bilingüe.
 
 ```bash
 ./packaging/build-deb.sh
-sudo apt install ./copiex_1.0.0_amd64.deb
+sudo apt install ./copiex_1.0.1_amd64.deb
 ```
 
 ## Qué instala
@@ -101,8 +101,8 @@ sudo copiex-dependencias online   # reintenta desde Internet
 Se puede evitar la pregunta:
 
 ```bash
-sudo COPIEX_ACTUALIZAR=si apt install ./copiex_1.0.0_amd64.deb
-sudo COPIEX_ACTUALIZAR=no apt install ./copiex_1.0.0_amd64.deb
+sudo COPIEX_ACTUALIZAR=si apt install ./copiex_1.0.1_amd64.deb
+sudo COPIEX_ACTUALIZAR=no apt install ./copiex_1.0.1_amd64.deb
 ```
 
 La pregunta solo aparece con terminal interactiva; desde un gestor gráfico se
@@ -182,5 +182,10 @@ máquina limpia; eso queda pendiente de la prueba del usuario.
 - `upgrade.sh` necesita Internet para actualizar los paquetes y reconstruir el
   `.deb`; sin red queda `sudo copiex-dependencias` para usar el repositorio
   offline ya instalado.
-- La versión del paquete sigue siendo `1.0.0`; `upgrade.sh` usa `--reinstall`
-  para aplicar cambios aunque no se haya incrementado.
+- La versión del paquete es `1.0.1`; `upgrade.sh` usa `--reinstall` para
+  aplicar cambios aunque no se haya incrementado la versión.
+- Para descargar las dependencias de la suite empaquetada, `build-deb.sh` aísla
+  también `Dir::State::status` (`/dev/null`). Sin eso, al construir en una
+  versión de Ubuntu más nueva que la empaquetada apt toma como candidatas las
+  versiones instaladas en el equipo y la descarga falla con «No se puede
+  encontrar una fuente para descargar la versión …».

@@ -8,12 +8,13 @@ el **icono a color en la bandeja** (la «C» blanca sobre verde). Este fichero y
 son todo lo que necesita una sesión nueva: el asistente no conserva memoria entre chats, y
 este resumen evita tener que releer el historial de la conversación anterior.
 
-**Resumen en una línea:** Copiex está terminado: los 14 requerimientos del pliego y los 4
+**Resumen en una línea:** Copiex está terminado: los 16 requerimientos del pliego y los 4
 errores están resueltos (bandeja, extensión de Nautilus, historial SQLite con reanudación
 automática, `menu.yaml` con todos los textos, «Acerca de», alerta sonora propia con botón
 «Eliminar», icono propio, copia optimizada con `copy_file_range`, varios destinos con una
-sola lectura, copia hacia/desde MTP, selector de idioma español/inglés e idioma inicial
-tomado de GNOME al instalar el `.deb`). El 14/11 se corrigieron los dos fallos de la prueba
+sola lectura, copia hacia/desde MTP, selector de idioma español/inglés, idioma inicial
+tomado de GNOME al instalar el `.deb`, tiempo restante estimado y estable, y «Cortar» dentro
+de la misma partición moviendo al instante sin copiar). El 14/11 se corrigieron los dos fallos de la prueba
 real: un destino cuyo fichero se borra durante la pausa no infla el progreso y se
 reintenta solo; y la extensión ya no envía desde un hilo ni lanza Copiex con `fork` desde
 Nautilus (lo arranca el bus de sesión), así que la petición sale en milisegundos. El 16/11
@@ -52,7 +53,7 @@ lista completa al mismo motor de varios destinos.
 
 Abre el proyecto en Freebuff y pega algo como:
 
-> Lee `TODO.md` y `NOTES.md`. Los 14 requerimientos y los 4 errores del pliego ya están
+> Lee `TODO.md` y `NOTES.md`. Los 16 requerimientos y los 4 errores del pliego ya están
 > cerrados: no rehagas lo ya verificado y, si hay algo nuevo, sigue las reglas de
 > `AGENTS.md` (textos en `menu.yaml`, nombres de fichero en inglés, sin workers, sin
 > `pkill -f`). Antes de tocar el motor o la extensión, lee 3 ter, 3 quindecies y
@@ -61,20 +62,23 @@ Abre el proyecto en Freebuff y pega algo como:
 > icono a color en la bandeja. El paquete `.deb`, `upgrade.sh`, la retirada de `install.sh`
 > y la publicación están en las secciones 3 undevicies y 3 vicies. El selector de idioma
 > está en la sección 3 duovicies, el idioma inicial al instalar en 3 tervicies y el
-> diálogo de varios destinos del botón «Nueva copia» en 3 quatervicies. No queda trabajo
-> pendiente salvo tu prueba real del menú de Nautilus, del icono, del selector y del
-> diálogo de destinos (sección 4). No hagas commit ni push sin pedírmelo.
+> diálogo de varios destinos del botón «Nueva copia» en 3 quatervicies, el tiempo restante
+> del requerimiento 15 en 3 quinvices y el movimiento instantáneo dentro de la misma
+> partición del requerimiento 16 en 3 sexvicies. No queda trabajo pendiente salvo tu prueba real del
+> menú de Nautilus, del icono, del selector y del diálogo de destinos (sección 4). No hagas
+> commit ni push sin pedírmelo.
 
 La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hechas.
 
-### Estado actual al retomar (18/11/2026)
+### Estado actual al retomar (23/11/2026)
 
-- **Git:** árbol limpio y todo publicado en `repo-copiex/main`: el último commit es
-  **`cca1b2c`** «Varios destinos desde la ventana principal», que incluye el aviso a
-  Nautilus del cambio de idioma, el idioma inicial del `.deb`, el diálogo de destinos y su
-  documentación (antes, `fc04da6` «Idioma inglés», `09fb53f` y `ce8d9ee`). El `.deb` de
-  60 MB no se versiona, y desde el 18/11 tampoco los `__pycache__/*.pyc` (están en
-  `.gitignore`).
+- **Git:** todo publicado hasta **`4ab3f99`** «Anotar el arreglo del icono de la bandeja
+  en la documentación» (antes, `8c58d5a` «Copiex .deb preparado para Ubuntu 24.04 y
+  26.04», `3793477`, `cca1b2c`, `8f7d8eb`, `fc04da6`, `09fb53f` y `ce8d9ee`). Hay cambios
+  locales **sin publicar**: el arreglo de `IconPixmap` de `copiex/tray.py` con
+  `librsvg2-common` en `packaging/deps.txt`, y los requerimientos 15 y 16 en
+  `copiex/engine.py`. El `.deb` de 60 MB no se versiona, y desde el 18/11 tampoco los
+  `__pycache__/*.pyc` (están en `.gitignore`).
 - **En marcha:** al retomar, la app **no está arrancada**; se levanta con
   `./copiex-launcher --bandeja` (o se activa sola desde Nautilus). Nautilus tiene la
   extensión instalada idéntica a la fuente.
@@ -93,8 +97,9 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
 - **Confirmado por el usuario el 17/11:** «Cortar» y que, al cambiar de idioma en Copiex,
   el menú de Nautilus sale traducido sin reiniciarlo (basta reabrir el menú contextual).
 - **Pendiente del usuario:** confirmar que en el panel ya se ve la «C» verde. Mover
-  hacia/desde MTP y mover carpetas vacías quedan como mejoras opcionales.
-- **Paquete .deb:** `copiex_1.0.0_amd64.deb` (60 MB) en la raíz, ignorado por Git, y el
+  carpetas vacías ya funciona (requerimiento 16, 3 sexvicies); mover hacia/desde MTP sigue
+  como mejora opcional.
+- **Paquete .deb:** `copiex_1.0.1_amd64.deb` (60 MB) en la raíz, ignorado por Git, y el
   empaquetado en `packaging/` (sí versionado); `upgrade.sh` actualiza deps, reconstruye el
   `.deb` y reinstala. Todo está en `ce8d9ee`. Detalles y límites en 3 undevicies y 3 vicies.
 - **Siguiente paso:** si no pide algo nuevo, no rehacer lo ya verificado ni hacer
@@ -126,6 +131,7 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
 | Destino borrado o truncado durante la pausa | **Corregido el 14/11.** Antes se seguía escribiendo en el inodo ya borrado: el progreso mentía y la operación quedaba en `running`. Ahora se comprueba el fichero antes de cada bloque, el progreso baja a lo que queda en disco (0 si se borró) y el destino se reintenta al terminar el resto; los botones pasan a «Eliminar» solo con todo completo. Detalles y pruebas en 3 quindecies. |
 | Arranque desde Nautilus sin hilos | **Hecho el 14/11.** La extensión ya no envía desde un `threading.Thread` (se quedaba esperando el GIL) ni lanza Copiex con `subprocess.Popen` (fork desde Nautilus): `_Envio` usa callbacks de `GLib.io_add_watch` y el arranque lo hace el bus de sesión. Medido: 0,404 s en frío y 0,003 s con la app abierta. Detalles en 3 ter. |
 | MTP (requerimiento 12) | **Hecho y probado el 16/11.** Las URIs `mtp://` se resuelven con GIO a su montaje de gvfs-fuse y el motor trabaja con rutas normales; funciona en ambos sentidos, con varios destinos y una sola lectura, con pausa, cancelación y reanudación. Al escribir en MTP el fichero se rehace desde cero (MTP no admite continuación fiable). Detalles en 3 septendecies. |
+| «Cortar» en la misma partición (requerimiento 16) | **Hecho y comprobado el 23/11.** Si origen y destino comparten `st_dev`, `Operacion._mover_directo()` usa `os.rename()` en vez de copiar: mover 512 MiB tardó 1 ms y el inodo no cambió. Con otra partición, MTP, varios destinos, un nombre ya ocupado o un renombrado que el sistema rechaza, cae al camino de copiar y borrar de siempre. Detalles en 3 sexvicies. |
 | «Cortar con Copiex» (mover) | **Hecho y probado el 16/11.** Nueva entrada en el menú de Nautilus, también para «Pegar con Copiex N destinos»: copia primero y borra los orígenes cuando **todos** los destinos están completos; con cancelación, error o destino ausente los originales no se tocan. La marca `mover` se guarda en el historial y el portapapeles con cabecera `cut` también se mueve. Detalles en 3 octodecies. |
 
 Lo único **no** comprobado visualmente es lo que exige un clic o mirar el panel: el menú
@@ -143,7 +149,7 @@ real de arranque con la app cerrada desde el menú; sí en banco, por D-Bus (0,4
 |---|---|---|
 | `copiex/util.py` | 172 | Rutas (`runtime_dir`, `socket_path`, `data_dir`), URIs ↔ rutas (`uri_to_path` acepta `file:` y `mtp:`, `es_mtp`, `ruta_a_uri`, `short_path` muestra `mtp://…`), formatos de tamaño y tiempo, `APP_ID`/`APP_NAME`/`EXTENSION_NAME`. |
 | `copiex/logs.py` | 203 | Registro único `copiex.log` en DEBUG con 7 días de retención: poda atómica por fecha y por tamaño (`podar`, `ManejadorSemanal`, `configurar_registro`). |
-| `copiex/engine.py` | 1183 | `Operacion` (hilo de copia, pausa, aviso, velocidad, persistencia), `DestinoCopia` (estado por destino) y `Motor` (crear, pausar, reanudar, cancelar, historial). Bloques de 1 MiB; un solo destino con `os.copy_file_range` (reserva a lectura/escritura) y varios con `_copiar_a_varios()` (una lectura, escritura a todos); un `stat` por fichero y carpetas memorizadas; `_copiar_fichero()` reanuda por byte; `_pares()` calcula origen→destino. `_intacto()`/`_destino_cambio()` detectan un destino borrado o truncado; `_ejecutar_plan()` y hasta 3 pasadas en `_trabajar_seguro()` reintentan esos destinos; el `finally` de `_trabajar` no deja ninguno en `running`. Con MTP (`es_mtp`) no usa `copy_file_range` y rehace el fichero en vez de continuarlo por byte, descontando del progreso el parcial anterior. `Operacion.mover` (un «cortar») borra los orígenes en `_borrar_origenes()` solo con todos los destinos en `done`; la marca se persiste en la columna `mover`. |
+| `copiex/engine.py` | 1419 | `Operacion` (hilo de copia, pausa, aviso, velocidad, persistencia), `DestinoCopia` (estado por destino) y `Motor` (crear, pausar, reanudar, cancelar, historial). Un «Cortar» con un solo destino en la misma partición se hace con `os.rename()` en `_mover_directo()` (instantáneo, sin copiar); si no se puede, sigue el camino de copia y borrado. Bloques de 1 MiB; un solo destino con `os.copy_file_range` (reserva a lectura/escritura) y varios con `_copiar_a_varios()` (una lectura, escritura a todos); un `stat` por fichero y carpetas memorizadas; `_copiar_fichero()` reanuda por byte; `_pares()` calcula origen→destino. `_intacto()`/`_destino_cambio()` detectan un destino borrado o truncado; `_ejecutar_plan()` y hasta 3 pasadas en `_trabajar_seguro()` reintentan esos destinos; el `finally` de `_trabajar` no deja ninguno en `running`. Con MTP (`es_mtp`) no usa `copy_file_range` y rehace el fichero en vez de continuarlo por byte, descontando del progreso el parcial anterior. `Operacion.mover` (un «cortar») borra los orígenes en `_borrar_origenes()` solo con todos los destinos en `done`; la marca se persiste en la columna `mover`. |
 | `copiex/store.py` | 248 | SQLite en `~/.local/share/copiex/historial.db`: alta, actualización, pendientes, migración de `pausa_manual` y tabla `destinos` (`crear` acepta lista, `actualizar_destino`, `destinos_de`). |
 | `copiex/watcher.py` | 75 | Hilo cada 6 s que reanuda `paused`/`error` cuando origen y **todas** las carpetas destino están disponibles; respeta `pausa_manual`. |
 | `copiex/menu.py` | 455 | Textos de la interfaz: lector YAML mínimo de `menu.yaml`, textos por defecto en español e inglés, elección persistida en `~/.config/copiex/language` y `texto("menu.nueva")`/`formato(clave, …)`. |
@@ -168,7 +174,8 @@ desde Nautilus, la extensión instalada en
 
 El pliego se renumeró el 13/11: al retirar los antiguos 9–11 (workers), «alerta sonora»,
 «Acerca de» y `menu.yaml` pasaron a ser los requerimientos 9, 10 y 11. El 16/11 se añadió
-el 12 (MTP) y el 17/11 el 13 (selector de idioma).
+el 12 (MTP), el 17/11 el 13 (selector de idioma), el 18/11 el 14 (idioma inicial al
+instalar el `.deb`) y el 23/11 el 15 (tiempo restante realista y estable).
 
 | # | Requerimiento | Estado |
 |---|---|---|
@@ -181,10 +188,12 @@ el 12 (MTP) y el 17/11 el 13 (selector de idioma).
 | 7 | Tomar la copia de Nautilus | Hecho: «Copiar/Pegar con Copiex» y lectura del portapapeles real de Nautilus. |
 | 8 | Estado en tiempo real y restauración automática | Hecho: SQLite + `watcher.py` (sección 3 quater). |
 | 9 | Alerta sonora y botón «Eliminar» al terminar | Hecho: `copiex/sound.py` una vez por copia y «Eliminar» en lugar de «Cancelar» (sección 3 undecies). |
-| 10 | «Acerca de» con descripción corta y versión, en `menu.yaml` | Hecho: `app.acerca` con `Adw.AboutDialog` (versión 1.0.0 y descripción del YAML); sección 3 decies. |
+| 10 | «Acerca de» con descripción corta y versión, en `menu.yaml` | Hecho: `app.acerca` con `Adw.AboutDialog` (versión 1.0.1 y descripción del YAML); sección 3 decies. |
 | 11 | `menu.yaml` con nombres de opciones y textos de ventanas | Hecho: menús de ventana, bandeja y Nautilus más diálogos leen `menu.yaml`; sección 3 decies. |
 | 12 | Copiar hacia o desde dispositivos `mtp://` | Hecho y probado el 16/11 con un Android real: ambos sentidos, varios destinos, pausa, cancelación y reanudación; sección 3 septendecies. |
 | 13 | Cambiar toda la interfaz entre español e inglés | Hecho el 17/11: selector en el menú del Centinela y de la ventana, preferencia persistida y etiquetas de Nautilus actualizadas sin reiniciar; sección 3 duovicies. |
+| 14 | Idioma inicial según GNOME al instalar el `.deb` | Hecho el 18/11: `packaging/initial-language` y `postinst`, sin pisar la elección del usuario; sección 3 tervicies. |
+| 15 | Tiempo restante realista y que no cambie continuamente | Hecho el 23/11: velocidad de los últimos 15 s con suavizado y actualización con histéresis; sección 3 quinvices. |
 | E1 | No detecta copias de Nautilus estando activo | Corregido y verificado. |
 | E2 | Error de E/S sin reanudar ni botón de cancelar | Corregido: vigilante + botones «Reintentar»/«Cancelar». |
 | E3 | Varios ficheros se copian muy lentos | Medido y mejorado: −20 % de tiempo y −22 % de CPU en 2 000 ficheros pequeños, −14 % en un fichero de 256 MiB (`copy_file_range`, un `stat` por fichero, carpetas memorizadas); sección 3 duodecies. |
@@ -404,7 +413,7 @@ inválido ahora produce aviso visible en vez de nada.
 
 Comprobado: poda por fecha (descarta entradas de 8 y 10 días, conserva las de 3 días y de
 ahora, incluidas sus continuaciones), poda por tamaño (respeta el tope), arranque real con
-un bus D-Bus privado (línea «Copiex 1.0.0 arranca (pid …, bandeja)»), y una sesión con una
+un bus D-Bus privado (línea «Copiex 1.0.1 arranca (pid …, bandeja)»), y una sesión con una
 copia de 2 GB pausada, reanudada, cancelada a 406 MB y un origen inexistente: el fichero
 cuenta la historia completa. Tras el cambio hay que **reiniciar la app** para que use este
 registro (hecho: instancia reiniciada en bandeja).
@@ -460,7 +469,7 @@ necesita reiniciar la aplicación** (la caché dura toda la sesión).
 **«Acerca de»**: acción `app.acerca`, entrada en el menú de tres rayas de la ventana entre
 «Ocultar ventana» y «Salir». Usa `Adw.AboutDialog` con el nombre, el icono, la versión y la
 descripción de `aplicacion.descripcion`. La versión sale de `copiex/__init__.py`
-(`__version__` = «1.0.0»), no del YAML, para que haya una sola fuente.
+(`__version__` = «1.0.1»), no del YAML, para que haya una sola fuente.
 
 **Extensión de Nautilus**: se instala como fichero suelto y no puede importar el paquete,
 así que repite un lector mínimo para la sección `nautilus:`. Encuentra `menu.yaml` a partir
@@ -859,7 +868,7 @@ Nautilus sobre una carpeta del teléfono; eso queda para la prueba del usuario.
 ## 3 undevicies. Paquete .deb con dependencias offline (16/11)
 
 En `packaging/` hay un empaquetado completo que genera
-`copiex_1.0.0_amd64.deb` en la raíz del proyecto (unos 122 MB: trae las
+`copiex_1.0.1_amd64.deb` en la raíz del proyecto (unos 122 MB: trae las
 dependencias de Ubuntu 24.04 y de Ubuntu 26.04).
 
 - **Instalación:** el `.deb` solo declara `Depends: python3`, así que `apt`/`dpkg`
@@ -911,7 +920,7 @@ dependencias de Ubuntu 24.04 y de Ubuntu 26.04).
   `uninstall.sh` queda solo para limpiar instalaciones antiguas de usuario.
 
 Comprobado el 16/11: `dpkg-deb -I` (control, `Depends: python3`, 183 `.deb`),
-`apt-get -s install ./copiex_1.0.0_amd64.deb` (solo Copiex como paquete nuevo), la
+`apt-get -s install ./copiex_1.0.1_amd64.deb` (solo Copiex como paquete nuevo), la
 importación del código extraído y `menu.yaml` desde `/opt/copiex`, y una simulación de
 `apt-get update`/`install` contra el repositorio local. También se comprobó la sintaxis de
 `upgrade.sh`/`uninstall.sh`/`build-deb.sh`, la resolución de las 183 dependencias,
@@ -939,7 +948,7 @@ se conserva para limpiar instalaciones antiguas de usuario; avisa si detecta el 
    `apt-get install --only-upgrade` sobre las ya instaladas; después instala/actualiza las
    directas de `packaging/deps.txt`;
 3. ejecuta `packaging/build-deb.sh`, que descarga las versiones actuales de las 183
-   dependencias y reconstruye `copiex_1.0.0_amd64.deb`;
+   dependencias y reconstruye `copiex_1.0.1_amd64.deb`;
 4. instala el `.deb` con `--reinstall` si ya estaba instalado (la versión no cambia), con
    `COPIEX_ACTUALIZAR=no` para que el `postinst` no vuelva a preguntar;
 5. avisa si Copiex está abierto y de que hay que reiniciar Nautilus (`nautilus -q`).
@@ -1120,9 +1129,97 @@ ventana** (no se abrió nada en el escritorio del usuario):
 botones con ratón) ni se ha lanzado una copia real a dos carpetas desde la ventana; el
 motor de varios destinos sí estaba probado desde el 13/11 (3 quindecies).
 
+## 3 quinvices. Tiempo restante realista y estable (requerimiento 15, 23/11)
+
+Antes, cada refresco hacía `falta / velocidad` con una media exponencial de alfa 0,4 que se
+recalculaba cada 0,5 s: un bloque lento, un pico de caché o una espera corta del disco
+movían la velocidad y la cifra «quedan …» cambiaba de un refresco a otro (cientos de veces
+en una copia larga).
+
+- **Velocidad por ventana.** `Operacion._velocidad()` guarda muestras
+  `(instante, copiados)` y mide los bytes/s sobre los últimos `VENTANA_VELOCIDAD = 15 s`;
+  después suaviza esa medida con una media exponencial de constante
+  `SUAVIZADO_VELOCIDAD = 15 s`. Los picos se reparten en vez de marcar el ritmo.
+- **Sin estimación prematura.** No hay restante hasta tener `MINIMO_MUESTRA_VELOCIDAD = 4 s`
+  de historia. Si el progreso baja (un destino borrado y reintentado) la medida se
+  reinicia, y si hay un hueco mayor que la ventana (el dispositivo dejó de responder)
+  también, en vez de arrastrar segundos sin copiar.
+- **Histéresis.** `Operacion.restante` solo acepta una cifra nueva si se separa de la
+  mostrada al menos `CAMBIO_MINIMO_RESTANTE = 5 s` o el 10 %, y como mucho una vez cada
+  `INTERVALO_MINIMO_RESTANTE = 3 s`; además se refresca sola cada
+  `REFRESCO_MAXIMO_RESTANTE = 30 s` para no quedarse obsoleta. Reanudar llama a
+  `_reiniciar_medida()`: una pausa larga no contamina la media.
+- **Sin cambios de interfaz.** Se sigue mostrando «quedan …» con `ventana.quedan` y
+  `fmt_restante`; no hay claves nuevas en `menu.yaml`.
+
+**Comprobado el 23/11** con un banco del motor sin GTK, reloj simulado y una copia de
+100 MiB repartida en 30 s, con dos patrones de velocidad (seno de ±25 % cada 2 s y paseo
+aleatorio de ±3 % cada 0,1 s):
+
+- El cálculo anterior (media exponencial de alfa 0,4) cambiaba la cifra **232 veces** en
+  30 s; el actual, **7** con el seno y **6** con el paseo aleatorio.
+- El mayor salto entre dos cifras mostradas baja a unos 11 s (seno) y 6 s (paseo), y no
+  hay estimación durante los primeros 4 s (aparece en cuanto la ventana se llena, en
+  torno a los 4-5 s).
+- Reanudar deja el restante en `None`, la velocidad a 0 y la ventana vacía.
+- `python3 -m py_compile copiex/*.py` sin errores.
+
+**No probado:** una copia real con el reloj de verdad no llega a mostrar el restante en
+este equipo (el NVMe copia más rápido que la ventana mínima de 4 s); la comprobación es
+del cálculo con reloj simulado, no de una copia lenta real.
+
+## 3 sexvicies. «Cortar» dentro de la misma partición: renombrar (requerimiento 16, 23/11)
+
+«Cortar con Copiex» copiaba siempre, y solo al terminar borraba los orígenes. Dentro de la
+misma partición eso era trabajo inútil: mover un fichero en su propio sistema de ficheros
+es cambiar el nombre de su entrada en el directorio, algo instantáneo aunque el fichero
+pese gigabytes.
+
+- **Dónde.** `Operacion._mover_directo()` se ejecuta al principio de `_trabajar_seguro()`,
+  antes de `_planificar()`, y hace `os.rename()` de cada origen.
+- **Cuándo.** Solo con `mover=True`, **un** destino, sin MTP, con todos los orígenes
+  presentes, en el mismo `st_dev` que la carpeta destino y sin que exista ya algo con ese
+  nombre en el destino. Si algo no se cumple, devuelve `False` y la operación sigue igual
+  que antes: copia y borra.
+- **Todo o nada.** Las condiciones se comprueban antes de tocar nada. Si un `os.rename`
+  falla a mitad (permisos, por ejemplo) se deshace lo ya renombrado y se pasa al camino de
+  copia; si ni siquiera se puede deshacer, la fila queda en `error` con el motivo.
+- **Progreso e historial.** Antes de renombrar se miden bytes y ficheros de los orígenes
+  (`_medir_origen()`, un `os.walk` con `lstat`, sin leer datos) para que la fila y la tabla
+  `destinos` queden completas (`done`, `copiados == total`). Suena la alerta como en
+  cualquier copia terminada.
+- **Enlaces simbólicos.** Se mira `os.lstat()`, que da el dispositivo de la carpeta que
+  contiene el enlace: `os.rename` mueve el enlace, no su destino.
+- **Carpetas vacías.** Un «Cortar» de una carpeta vacía ahora funciona al instante; antes
+  daba «No hay nada que copiar», porque el plan de copia no tenía ficheros.
+- **Sin cambios de interfaz.** No hay textos nuevos: se reutilizan los estados de siempre.
+
+**Comprobado el 23/11** con base de datos y carpetas temporales en `/tmp` (misma partición)
+y en `/dev/shm` (otra):
+
+- Mover un fichero de **512 MiB** en la misma partición: `done` en **0,001 s**, **mismo
+  inodo** en el destino, origen borrado, `mover = 1` y el destino `done` con
+  `copiados == total_bytes` en la BD.
+- Mover una carpeta con subcarpeta: mismo inodo, contenido intacto y origen borrado.
+- Nombre ya ocupado en el destino: cae al camino de copia (inodo distinto), hash correcto y
+  origen borrado.
+- Origen en `/tmp` y destino en `/dev/shm` (dispositivos distintos): copia normal, hash
+  correcto, inodo distinto y origen borrado.
+- Carpeta vacía: se mueve al instante y desaparece el origen.
+- Copia normal (`mover=False`): el origen sigue y el hash coincide, sin cambios.
+- `python3 -m py_compile copiex/*.py` sin errores.
+
+**Limitaciones conocidas:** con un nombre ya ocupado se conserva el comportamiento viejo
+(si el fichero del destino es más corto, la copia continúa desde su tamaño, como cualquier
+reanudación); y mover hacia/desde MTP o a varios destinos sigue copiando, porque ahí no
+hay un único renombrado posible.
+
 ## 4. Pendientes, por orden sugerido
 
-No hay trabajo pendiente del pliego. El usuario confirmó el 17/11 el menú real de Nautilus
+No hay trabajo pendiente del pliego. Los requerimientos 15 (tiempo restante) y 16 (mover
+renombrando en la misma partición) quedaron implementados y comprobados en banco el 23/11
+(3 quinvices y 3 sexvicies). El usuario confirmó el 17/11 el
+menú real de Nautilus
 (cortar a uno y a varios destinos y cambio de idioma); queda confirmar que el icono del
 panel se ve bien en 24.04 (los tres puntos se arreglaron el 19/11 con `IconPixmap`, ver el
 final de 3 quaterdecies), probar el idioma inicial con una instalación real del `.deb` (3
@@ -1203,9 +1300,9 @@ tervicies) y, si se quiere afinar, mover carpetas vacías y mover hacia/desde MT
 ## 6. Estado del sistema donde se probó
 
 Ubuntu 26.04 «resolute», GNOME 50.1, Nautilus 50.2.2, GTK 4.22.4, PyGObject 3.56.2,
-Wayland. El 16/11 había un Android montado por MTP (`gvfsd-mtp` y `gvfs-fuse` 1.60). El
-proyecto **es un repositorio git** (rama `main`; último commit publicado **`fc04da6`**
-«Idioma inglés»; remoto `repo-copiex` en GitHub). Los commits incluyen el trabajo del 13,
+Wayland. El 16/11 había un Android montado por MTP (`gvfsd-mtp` y `gvfs-fuse` 1.60). El proyecto **es un repositorio git** (rama `main`; último commit publicado **`4ab3f99`**
+«Anotar el arreglo del icono de la bandeja en la documentación»; remoto `repo-copiex` en
+GitHub). Los commits incluyen el trabajo del 13,
 14, 16 y 17/11 (motor de varios destinos, MTP, «Cortar», icono de bandeja, extensión sin
 hilos, `menu.yaml`, `upgrade.sh`, `.gitignore`, la retirada de `install.sh`, el arreglo de
 reanudación y el selector de idioma). El aviso a Nautilus del cambio de idioma va en el
@@ -1261,6 +1358,12 @@ op = m.crear(["/tmp/prueba/origen.bin"], "/tmp/prueba/destino")
   ya no existe y que `store.obtener(op.id)["mover"] == 1`. Con dos destinos, el origen
   debe desaparecer solo cuando ambos estén `done`. Cancelar o simular un destino ausente
   debe dejar el origen intacto. Por IPC: `{"cmd":"copy","sources":[…],"dests":[…],"move":true}`.
+- **Cortar en la misma partición (renombrado):** anotar `os.stat(origen).st_ino`, mover un
+  fichero grande de `/tmp/a` a `/tmp/b` con `mover=True` y comprobar que termina en
+  milisegundos, que el inodo del destino es el mismo, que el origen ya no existe y que
+  `copiados == total_bytes`. Para ver el camino de copia, repetir con el destino en
+  `/dev/shm`: el inodo cambia y el SHA-256 debe coincidir. Si el destino ya tiene un
+  fichero con ese nombre, también se copia (y se borra el origen) en vez de renombrar.
 - **MTP:** `uri_to_path("mtp://…")` da la ruta de gvfs-fuse; con un Android conectado,
   crear una carpeta temporal en `Almacenamiento interno compartido` (o similar), copiar
   en ambos sentidos con `Motor.crear`, comprobar SHA-256 y borrarla al terminar. MTP no

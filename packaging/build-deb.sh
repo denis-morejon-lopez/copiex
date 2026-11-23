@@ -66,6 +66,10 @@ SOURCES
 Dir::Etc::sourcelist "$base/sources.list";
 Dir::Etc::sourceparts "-";
 Dir::State::lists "$base/lists";
+# Sin esto, apt toma como candidatas las versiones instaladas en el equipo que
+# construye: al empaquetar para otra versión de Ubuntu (aqui 24.04 desde 26.04)
+# intenta descargar versiones que ese repositorio no tiene y la descarga falla.
+Dir::State::status "/dev/null";
 Dir::Cache::archives "$base/archivos";
 APT::Get::List-Cleanup "0";
 Acquire::Languages "none";
@@ -227,8 +231,8 @@ en /var/log/copiex-dependencias.log.
 
 Se puede forzar el modo sin preguntar:
 
-    sudo COPIEX_ACTUALIZAR=si  apt install ./copiex_1.0.0_amd64.deb
-    sudo COPIEX_ACTUALIZAR=no  apt install ./copiex_1.0.0_amd64.deb
+    sudo COPIEX_ACTUALIZAR=si  apt install ./copiex_1.0.1_amd64.deb
+    sudo COPIEX_ACTUALIZAR=no  apt install ./copiex_1.0.1_amd64.deb
 
 Si algo falla o se quiere reintentar:
 

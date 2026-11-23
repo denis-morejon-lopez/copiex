@@ -9,15 +9,18 @@ nombres en inglés** (`sound.py`, `watcher.py`, `nautilus_extension.py`, `copiex
 (`Vigilante`, `cargar()`, `texto()`).
 
 **Antes de tocar nada, lee `TODO.md`** (estado real, requerimiento por requerimiento,
-trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 14 requerimientos y 4 errores;
-los de workers se retiraron el 13/11, el 12 (MTP) se añadió el 16/11 y el 14 (idioma
-inicial al instalar) el 18/11).
+trampas y recetas de prueba) y `NOTES.md` (pliego vigente: 16 requerimientos y 4 errores;
+los de workers se retiraron el 13/11, el 12 (MTP) se añadió el 16/11, el 14 (idioma
+inicial al instalar) el 18/11, el 15 (tiempo restante estable) el 23/11 y el 16 (mover
+renombrando en la misma partición) el 23/11).
 
 ## Trabajo pendiente
 
-Los 14 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11; el 13 es
-el selector de idioma, añadido el 17/11; y el 14 es el idioma inicial según GNOME al
-instalar el `.deb`, añadido el 18/11), el error 3 (muchos ficheros) está medido y
+Los 16 requerimientos del pliego están hechos (el 12 es MTP, añadido el 16/11; el 13 es
+el selector de idioma, añadido el 17/11; el 14 es el idioma inicial según GNOME al
+instalar el `.deb`, añadido el 18/11; el 15 es el tiempo restante realista y estable y el
+16 es el «Cortar» instantáneo dentro de la misma partición, ambos del 23/11), el error 3
+(muchos ficheros) está medido y
 mejorado, y «Cortar con Copiex» mueve de verdad desde el 16/11. El empaquetado `.deb` y
 `upgrade.sh` están terminados, publicados y documentados en `TODO.md` (3 undevicies y
 3 vicies). El selector de idioma está en la sección 3 duovicies, el idioma inicial al
@@ -28,7 +31,7 @@ instalar en la 3 tervicies y el diálogo de varios destinos del botón «Nueva c
 **`fc04da6`** «Idioma inglés» (`repo-copiex/main`). Después se añadió el aviso a Nautilus
 (`Gio.FileMonitor` sobre `~/.config/copiex` + `emit_items_updated_signal()`) para que
 rehaga sus ítems al cambiar el idioma: va en el commit de esta corrección, junto con esta
-documentación (local, **sin push**). El `.deb` (`copiex_1.0.0_amd64.deb`, 60 MB) está
+documentación (local, **sin push**). El `.deb` (`copiex_1.0.1_amd64.deb`, 60 MB) está
 ignorado por Git. La app **no está arrancada** al retomar: `./copiex-launcher --bandeja`.
 Historial real: 43 filas y 21 en `destinos`. «Cortar» y el cambio de idioma en el menú real
 de Nautilus están confirmados por el usuario; falta confirmar el icono verde en el panel.
@@ -149,7 +152,12 @@ Lanzar la GUI desde un terminal sin bloquear:
   MTP no continúa por byte ni usa `copy_file_range`: rehace el fichero desde cero y
   descuenta el parcial del progreso. Requiere `gvfs-fuse` (paquete del sistema).
   `Operacion.mover` (un «Cortar») borra los orígenes en `_borrar_origenes()` solo cuando
-  todos los destinos están `done`; la marca se guarda en la columna `mover`.
+  todos los destinos están `done`; la marca se guarda en la columna `mover`. Con un solo
+  destino en la misma partición, `_mover_directo()` hace `os.rename()` al principio de
+  `_trabajar_seguro()`: el movimiento es instantáneo y no copia datos (requerimiento 16).
+  Si no puede, sigue el camino normal de copiar y borrar. La velocidad
+  se mide sobre los últimos 15 s (`VENTANA_VELOCIDAD`) con un suavizado exponencial y el
+  restante solo cambia cuando la diferencia supera 5 s o el 10 % (requerimiento 15).
 - `copiex/store.py`: historial SQLite, incluida la tabla `destinos` con la cola de cada
   carpeta destino. `copiex/watcher.py`: reanudación automática cada 6 s.
 - `packaging/initial-language`: idioma inicial del usuario al instalar el `.deb` (lee

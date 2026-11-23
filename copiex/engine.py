@@ -8,11 +8,13 @@ cada bloque leído, así que reanudar continúa exactamente donde se quedó.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import shutil
 import threading
 import time
 import traceback
+from collections import deque
 
 from .menu import formato, texto
 from .util import es_mtp
@@ -28,6 +30,17 @@ def texto_espera(motivo: str) -> str:
 
 log = logging.getLogger(__name__)  # mínimo entre avisos a la interfaz
 INTERVALO_GUARDADO = 0.5  # mínimo entre escrituras en SQLite
+
+# Tiempo restante (requerimiento 15): la velocidad se mide sobre una ventana
+# reciente y la cifra mostrada solo cambia cuando la diferencia es
+# significativa, para que no baile en la ventana.
+VENTANA_VELOCIDAD = 15.0  # segundos de historia para medir la velocidad
+MINIMO_MUESTRA_VELOCIDAD = 4.0  # sin esta ventana aún no se estima el restante
+SUAVIZADO_VELOCIDAD = 15.0  # constante de tiempo del suavizado (segundos)
+INTERVALO_MINIMO_RESTANTE = 3.0  # segundos entre dos actualizaciones
+CAMBIO_MINIMO_RESTANTE = 5.0  # diferencia en segundos para actualizar
+FRACCION_CAMBIO_RESTANTE = 0.10  # 10 % de la cifra mostrada
+REFRESCO_MAXIMO_RESTANTE = 30.0  # actualiza aunque el cambio sea pequeño
 
 
 class ErrorCopia(Exception):
@@ -97,7 +110,13 @@ class Operacion:
         # Motivo por el que el vigilante espera (dispositivo ausente, etc.).
         self.espera = ""
 
-        self.velocidad = 0.0  # media móvil exponencial de bytes/s
+        # Velocidad medida sobre los últimos VENTANA_VELOCIDAD segundos. Una
+        # media exponencial corta reaccionaba a cada pico y el restante saltaba.
+        self.velocidad = 0.0
+        self._muestras = deque()  # (instante, bytes copiados) de la ventana
+        self._velocidad_t = None  # instante del último suavizado
+        self._restante = None  # última estimación aceptada (histéresis)
+        self._restante_actualizado = 0.0
         self._bloqueando = False  # ¿está ahora mismo escrito en el destino?
         self._tramo = 0  # bytes escritos en el tramo actual (para la pausa limpia)
 
@@ -110,8 +129,6 @@ class Operacion:
         self._oyentes = []
         self._ultimo_aviso = 0.0
         self._ultimo_guardado = 0.0
-        self._v_bytes = 0
-        self._v_tiempo = time.monotonic()
 
     @property
     def destino(self) -> str:
@@ -153,8 +170,7 @@ class Operacion:
                 destino.estado = "running"
                 destino.error = None
                 destino.espera = ""
-        self._v_bytes = self.copiados
-        self._v_tiempo = time.monotonic()
+        self._reiniciar_medida()
         self._corriendo.set()
         self._persistir_estado()
         self._aviso(force=True)
@@ -411,19 +427,60 @@ class Operacion:
             log.exception("copia %s: no se pudo actualizar el progreso", self.id)
 
     # ------------------------------------------------------------------
+    def _reiniciar_medida(self):
+        """Olvida la velocidad medida (arranque o reanudación).
+
+        Si no, tras una pausa larga la ventana contendría segundos sin copiar y
+        el ritmo (y el tiempo restante) saldría irreal al reanudar.
+        """
+        self._muestras.clear()
+        self.velocidad = 0.0
+        self._velocidad_t = None
+        self._restante = None
+        self._restante_actualizado = 0.0
+
     def _velocidad(self, ahora):
-        transcurrido = ahora - self._v_tiempo
-        if transcurrido >= 0.5:
-            instantanea = (self.copiados - self._v_bytes) / transcurrido
-            if instantanea >= 0:
-                alfa = 0.4
-                self.velocidad = (
-                    instantanea
-                    if self.velocidad <= 0
-                    else (alfa * instantanea + (1 - alfa) * self.velocidad)
-                )
-            self._v_bytes = self.copiados
-            self._v_tiempo = ahora
+        """Bytes/s sobre los últimos segundos, no sobre el último bloque.
+
+        Se guardan muestras (instante, bytes copiados) y se descarta lo que sale
+        de la ventana. Así un bloque lento, un pico de caché o una espera corta
+        no cambian el ritmo de golpe, que es lo que hacía oscilar el restante.
+        """
+        if self._muestras and (ahora - self._muestras[-1][0]) > VENTANA_VELOCIDAD:
+            # Hueco grande (el dispositivo no respondía): la historia anterior
+            # ya no describe el ritmo actual.
+            self._muestras.clear()
+        self._muestras.append((ahora, self.copiados))
+        limite = ahora - VENTANA_VELOCIDAD
+        while len(self._muestras) > 2 and self._muestras[0][0] < limite:
+            self._muestras.popleft()
+        t0, c0 = self._muestras[0]
+        transcurrido = ahora - t0
+        if transcurrido < MINIMO_MUESTRA_VELOCIDAD:
+            self.velocidad = 0.0
+            self._restante = None
+            return 0.0
+        avance = self.copiados - c0
+        if avance < 0:
+            # El progreso puede bajar si se borra un destino y se reintenta:
+            # se empieza de nuevo en vez de dar una velocidad negativa.
+            self._muestras.clear()
+            self._muestras.append((ahora, self.copiados))
+            self.velocidad = 0.0
+            self._velocidad_t = None
+            self._restante = None
+            return 0.0
+        medida = avance / transcurrido
+        # Segunda pasada de suavizado: la ventana quita los picos de un bloque,
+        # y esta media exponencial quita el resto de la oscilación del disco
+        # para que la cifra «quedan …» no salte de un refresco a otro.
+        if self._velocidad_t is None or self.velocidad <= 0:
+            self.velocidad = medida
+        else:
+            dt = max(0.0, ahora - self._velocidad_t)
+            factor = 1.0 - math.exp(-dt / SUAVIZADO_VELOCIDAD)
+            self.velocidad += factor * (medida - self.velocidad)
+        self._velocidad_t = ahora
         return self.velocidad
 
     @property
@@ -434,13 +491,38 @@ class Operacion:
 
     @property
     def restante(self) -> float | None:
-        """Segundos restantes estimados, o None si no se puede estimar."""
+        """Segundos restantes estimados, o None si no se puede estimar.
+
+        La cifra se queda quieta mientras el cambio sea pequeño (menos de
+        CAMBIO_MINIMO_RESTANTE segundos o del 10 %) y no se revisa más de una vez
+        cada INTERVALO_MINIMO_RESTANTE segundos; aun así se refresca sola cada
+        REFRESCO_MAXIMO_RESTANTE segundos para no quedarse obsoleta. Así el
+        tiempo restante no cambia de forma continua (requerimiento 15).
+        """
         if self.estado != "running" or self.velocidad <= 0:
             return None
+        ahora = time.monotonic()
         falta = self.total_bytes - self.copiados
         if falta <= 0:
+            self._restante = 0.0
+            self._restante_actualizado = ahora
             return 0.0
-        return falta / self.velocidad
+        bruto = falta / self.velocidad
+        if self._restante is None:
+            self._restante = bruto
+            self._restante_actualizado = ahora
+            return bruto
+        desde = ahora - self._restante_actualizado
+        if desde < INTERVALO_MINIMO_RESTANTE:
+            return self._restante
+        cambio = abs(bruto - self._restante)
+        margen = max(
+            CAMBIO_MINIMO_RESTANTE, self._restante * FRACCION_CAMBIO_RESTANTE
+        )
+        if cambio >= margen or desde >= REFRESCO_MAXIMO_RESTANTE:
+            self._restante = bruto
+            self._restante_actualizado = ahora
+        return self._restante
 
     # ------------------------------------------------------------------
     # ejecución
@@ -509,6 +591,11 @@ class Operacion:
                     destino,
                     formato("errores.esperando_destino", ruta=short(destino.ruta)),
                 )
+        # «Cortar» dentro de la misma partición es cambiar el nombre de la
+        # entrada, no mover los datos: se hace antes de planificar y, si no es
+        # posible, la operación sigue por el camino normal de copiar y borrar.
+        if self._mover_directo():
+            return
         for intento in range(3):
             plan, tamanos = self._planificar()
             log.info(
@@ -519,8 +606,7 @@ class Operacion:
                 len(self.destinos),
                 f" (reintento {intento})" if intento else "",
             )
-            self._v_bytes = self.copiados
-            self._v_tiempo = time.monotonic()
+            self._reiniciar_medida()
             self._ejecutar_plan(plan)
             if self._cancelado.is_set():
                 break
@@ -561,6 +647,108 @@ class Operacion:
             # orígenes se borran aquí, nunca antes ni si algo quedó a medias.
             if self.estado == "done":
                 self._borrar_origenes()
+
+    def _mover_directo(self) -> bool:
+        """«Cortar» entre rutas de la misma partición: renombrar, no copiar.
+
+        Si origen y destino están en el mismo sistema de ficheros, mover es solo
+        cambiar el nombre de la entrada en el directorio: instantáneo, sin leer
+        ni escribir los datos y sin borrar después el origen. Devuelve True
+        cuando el movimiento ya está hecho y anotado; False deja que siga el
+        camino normal de copiar y borrar (otra partición, MTP, varios destinos,
+        un nombre ya ocupado o un renombrado que el sistema rechaza).
+        """
+        if not self.mover or self._cancelado.is_set():
+            return False
+        if len(self.destinos) != 1:
+            return False  # con varios destinos hay que copiar de todos modos
+        destino = self.destinos[0]
+        if es_mtp(destino.ruta) or not os.path.isdir(destino.ruta):
+            return False
+        if not self._corriendo.is_set() and not self._esperar_permiso():
+            return False  # cancelado mientras estaba en pausa
+        try:
+            dispositivo = os.stat(destino.ruta).st_dev
+        except OSError:
+            return False
+
+        # Todo se comprueba antes de renombrar nada: nada de dejar medio
+        # movimiento hecho si un origen es de otro dispositivo o falta.
+        movimientos = []
+        for origen in self.origenes:
+            origen = os.path.abspath(origen)
+            nombre = os.path.basename(origen.rstrip(os.sep))
+            if not nombre or es_mtp(origen) or not os.path.lexists(origen):
+                return False
+            try:
+                # lstat: un enlace simbólico se mueve con la entrada del enlace,
+                # que vive en el dispositivo de su carpeta, no en el del destino
+                # al que apunta.
+                if os.lstat(origen).st_dev != dispositivo:
+                    return False
+            except OSError:
+                return False
+            objetivo = os.path.join(destino.ruta, nombre)
+            if os.path.lexists(objetivo):
+                return False  # ya hay algo con ese nombre: decide la copia
+            movimientos.append((origen, objetivo))
+
+        bytes_totales = archivos_totales = 0
+        for origen, _objetivo in movimientos:
+            bytes_origen, archivos_origen = _medir_origen(origen)
+            bytes_totales += bytes_origen
+            archivos_totales += archivos_origen
+
+        hechos = []
+        try:
+            for origen, objetivo in movimientos:
+                os.rename(origen, objetivo)
+                hechos.append((origen, objetivo))
+        except OSError as exc:
+            # Si el renombrado falla a mitad, se deshace lo hecho para que el
+            # camino de copia encuentre los orígenes donde estaban.
+            deshecho = True
+            for origen, objetivo in reversed(hechos):
+                try:
+                    os.rename(objetivo, origen)
+                except OSError as retroceso:
+                    deshecho = False
+                    log.error(
+                        "copia %s: no se pudo deshacer el movimiento de %s: %s",
+                        self.id,
+                        short(objetivo),
+                        retroceso,
+                    )
+            log.warning(
+                "copia %s: no se pudo mover renombrando (%s); %s",
+                self.id,
+                exc,
+                "se copia y se borra" if deshecho else "queda a medias",
+            )
+            if not deshecho:
+                raise ErrorCopia(f"{exc}; no se pudo deshacer el movimiento") from exc
+            return False
+
+        destino.total_bytes = self.total_bytes = bytes_totales
+        destino.total_archivos = self.total_archivos = archivos_totales
+        destino.copiados = self.copiados = bytes_totales
+        destino.archivos_ok = self.archivos_ok = archivos_totales
+        destino.estado = "done"
+        destino.error = None
+        destino.espera = ""
+        self.estado = "done"
+        self.error = None
+        self.espera = ""
+        self._persistir_estado()
+        self._aviso(force=True)
+        log.info(
+            "copia %s: movimiento en la misma partición, %d origen(es) "
+            "renombrado(s) al instante (%d bytes)",
+            self.id,
+            len(movimientos),
+            bytes_totales,
+        )
+        return True
 
     def _borrar_origenes(self):
         """Borra los orígenes de un «Cortar» ya copiado a todos los destinos.
@@ -986,6 +1174,27 @@ def _borrar_si_incompleto(origen: str, destino: str) -> None:
             os.unlink(destino)
     except OSError:
         pass  # mejor esfuerzo: cancelar nunca debe fallar por esto
+
+
+def _medir_origen(origen: str) -> tuple[int, int]:
+    """Bytes y ficheros de un origen, para anotar un movimiento sin copiarlo.
+
+    Cuenta igual que el plan de copia (`_pares`): los ficheros, no las carpetas.
+    """
+    try:
+        if os.path.islink(origen) or not os.path.isdir(origen):
+            return os.lstat(origen).st_size, 1
+    except OSError:
+        return 0, 1
+    total = archivos = 0
+    for raiz, _dirs, ficheros in os.walk(origen):
+        for nombre in ficheros:
+            try:
+                total += os.lstat(os.path.join(raiz, nombre)).st_size
+            except OSError:
+                pass
+            archivos += 1
+    return total, archivos
 
 
 def _pares(origenes, destino) -> list[tuple[str, str]]:

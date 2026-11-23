@@ -33,18 +33,20 @@ reflejado en ese fichero menu.yaml
 14- Al instalar el .deb, la aplicación debe tomar el idioma de la interfaz Gnome: español si Gnome
 está en español e inglés si está en cualquier otro idioma. Después el usuario lo puede cambiar
 desde el menú, como ya funciona.
+15- El tiempo estimado de culminación de una copia debe ser realista y no debe cambiar
+continuamente: debe basarse en el ritmo reciente de la copia y la cifra mostrada debe quedar
+estable mientras no haya un cambio significativo.
+16- Al usar «Cortar con Copiex» y «Pegar con Copiex» con origen y destino en el mismo
+dispositivo de almacenamiento y partición, la operación debe ser inmediata: basta con mover
+la referencia del fichero o directorio al nuevo camino, sin copiar los datos. Solo cuando
+el destino esté en otra partición (o sea MTP) debe copiar y después borrar el origen.
 
 ### Errores detectados
-1- Copiex no detecta la copia que se intenta hacer a través de Nautilus cuando ya está activo en la ventana superior derecha.
-2- Cuando la conexión con el origen o con el destino falla, saca un error de entrada/salida, pero no se reanuda automáticamente la copia cuando se restablecen los dispositivos. Tampoco en ese
-momento de desconexión aparece algún botón para cancelar la copia si se quisiera.
-3- Veo cuando copio varios ficheros se hacen muy lentas las copias. Debe mejorar el algoritmo de copia para minimizar el tiempo total de copia.
-4- Cuando Copiex no está en ejecución, y doy clic derecho sobre un archivo y selecciono:  "Copiar con Copiex". Y luego en el dispositivo destino doy clic derecho "¨Pegar con Copiex"
-no veo que active e inicie la aplicación, y debería hacerlo.
 
-### Estado de implementación (18/11/2026)
 
-Los 14 requerimientos y los 4 errores están resueltos y probados. El 16/11 se añadieron el
+### Estado de implementación (23/11/2026)
+
+Los 16 requerimientos y los 4 errores están resueltos y probados. El 16/11 se añadieron el
 requerimiento 12 (copiar hacia/desde `mtp://`), «Cortar con Copiex» (mueve: copia y borra
 los orígenes al terminar, también con «Pegar con Copiex N destinos») y el icono a color en
 la bandeja (la «C» blanca sobre verde). El 17/11 se añadió el requerimiento 13: selector de
@@ -64,13 +66,18 @@ el usuario (17/11). Queda solo confirmar que el icono del panel es el verde. El 
 **`ce8d9ee`** (`repo-copiex/main`). El 17/11 se publicó en **`09fb53f`** el arreglo de
 reanudación de copias recuperadas y, después, en **`fc04da6`** «Idioma inglés», el selector
 de idioma. El aviso a Nautilus (`emit_items_updated_signal()` al cambiar de idioma), el
-idioma inicial del `.deb`, esta documentación y el diálogo de destinos del botón «Nueva
-copia» se publicaron juntos en el commit del 18/11 **`cca1b2c`** («Varios destinos desde la
-ventana principal»), que dejó el árbol limpio. Desde entonces los `__pycache__/*.pyc` ya no se
-versionan.
+idioma inicial del `.deb`, esta documentación y el diálogo de destinos del botón «Nueva copia» se publicaron juntos en el commit del 18/11
+**`cca1b2c`** («Varios destinos desde la ventana principal»), que dejó el árbol limpio.
+Desde entonces los `__pycache__/*.pyc` ya no se versionan. El 23/11 se añadió el
+requerimiento 15: el tiempo restante se calcula con la velocidad de los últimos 15 s y solo
+cambia cuando la diferencia es significativa, para que no oscile en la ventana
+(`copiex/engine.py`; detalle en la sección 3 quinvices de `TODO.md`). También el 23/11 se
+añadió el requerimiento 16: «Cortar con Copiex» dentro de la misma partición ya no copia,
+renombra (movimiento instantáneo) y deja la copia y borrado para otra partición, MTP,
+varios destinos o un nombre ya ocupado (sección 3 sexvicies de `TODO.md`).
 
 Desde el 16/11 hay un instalador `.deb` en la raíz del proyecto
-(`copiex_1.0.0_amd64.deb`, generado con `packaging/build-deb.sh`). Incluye las
+(`copiex_1.0.1_amd64.deb`, generado con `packaging/build-deb.sh`). Incluye las
 dependencias en un repositorio APT local para instalar sin Internet y, si hay red y
 terminal, pregunta si actualizarlas desde Ubuntu. `install.sh` ya no existe: el `.deb`
 instala la aplicación y `./upgrade.sh` actualiza las dependencias (directas y transitivas
