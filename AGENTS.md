@@ -27,12 +27,15 @@ mejorado, y «Cortar con Copiex» mueve de verdad desde el 16/11. El empaquetado
 instalar en la 3 tervicies y el diálogo de varios destinos del botón «Nueva copia» en la
 3 quatervicies. Todo está publicado en `repo-copiex/main` y el árbol queda limpio.
 
-**Estado al 17/11/2026:** el **selector de idioma español/inglés** se publicó en
-**`fc04da6`** «Idioma inglés» (`repo-copiex/main`). Después se añadió el aviso a Nautilus
-(`Gio.FileMonitor` sobre `~/.config/copiex` + `emit_items_updated_signal()`) para que
-rehaga sus ítems al cambiar el idioma: va en el commit de esta corrección, junto con esta
-documentación (local, **sin push**). El `.deb` (`copiex_1.0.1_amd64.deb`, 60 MB) está
-ignorado por Git. La app **no está arrancada** al retomar: `./copiex-launcher --bandeja`.
+**Estado al 23/11/2026:** el **selector de idioma español/inglés** se publicó en
+**`fc04da6`** «Idioma inglés» (`repo-copiex/main`). El aviso a Nautilus
+(`Gio.FileMonitor` sobre `~/.config/copiex` + `emit_items_updated_signal()`) se publicó
+en **`cca1b2c`**. El 23/11 se publicaron **`26a6873`** «Publicar el icono de la bandeja
+como mapa de bits» (con `librsvg2-common`) y **`273ae03`** «Copiex 1.0.1: mover dentro de
+la misma partición y arreglar el empaquetado» (requerimientos 15 y 16 y el arreglo del
+`apt.conf` del build), y el árbol queda limpio. El proyecto es **GPL-3.0** desde ese día
+(`LICENSE`, `517b76e`). El `.deb` (`copiex_1.0.1_amd64.deb`, 127 MB) está ignorado por Git.
+La app **no está arrancada** al retomar: `./copiex-launcher --bandeja`.
 Historial real: 43 filas y 21 en `destinos`. «Cortar» y el cambio de idioma en el menú real
 de Nautilus están confirmados por el usuario; falta confirmar el icono verde en el panel.
 
@@ -88,6 +91,10 @@ de Nautilus están confirmados por el usuario; falta confirmar el icono verde en
   `destinos`. Desde el 18/11 la ventana principal crea las mismas operaciones con el botón
   «Nueva copia»: la carpeta elegida en el selector es el primer destino y
   `copiex/destinations.py` añade los demás antes de empezar.
+- **Licencia:** el proyecto es **GPL-3.0** desde el 23/11/2026 (`LICENSE`, añadido desde
+  la web de GitHub en `517b76e`). No la cambies ni borres el fichero. El `copyright` que
+  genera `build-deb.sh` aún dice «la misma licencia que el proyecto Copiex»; nombrar allí
+  GPL-3.0 (y quizá incluir `LICENSE` en `/usr/share/doc/copiex/`) queda pendiente.
 - **Git:** el proyecto tiene repositorio (remoto `repo-copiex` en GitHub). **No hagas
   commit ni push** salvo que el usuario lo pida; y avísale de que la URL del remoto lleva un
   token incrustado en `.git/config`, que debería rotar. Los `__pycache__/*.pyc` no se

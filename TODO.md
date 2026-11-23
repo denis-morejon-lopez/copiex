@@ -64,7 +64,8 @@ Abre el proyecto en Freebuff y pega algo como:
 > está en la sección 3 duovicies, el idioma inicial al instalar en 3 tervicies y el
 > diálogo de varios destinos del botón «Nueva copia» en 3 quatervicies, el tiempo restante
 > del requerimiento 15 en 3 quinvices y el movimiento instantáneo dentro de la misma
-> partición del requerimiento 16 en 3 sexvicies. No queda trabajo pendiente salvo tu prueba real del
+> partición del requerimiento 16 en 3 sexvicies. La licencia GPL-3.0 que añadiste el 23/11
+> está en 3 septvicies. No queda trabajo pendiente salvo tu prueba real del
 > menú de Nautilus, del icono, del selector y del diálogo de destinos (sección 4). No hagas
 > commit ni push sin pedírmelo.
 
@@ -72,13 +73,13 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
 
 ### Estado actual al retomar (23/11/2026)
 
-- **Git:** todo publicado hasta **`4ab3f99`** «Anotar el arreglo del icono de la bandeja
-  en la documentación» (antes, `8c58d5a` «Copiex .deb preparado para Ubuntu 24.04 y
-  26.04», `3793477`, `cca1b2c`, `8f7d8eb`, `fc04da6`, `09fb53f` y `ce8d9ee`). Hay cambios
-  locales **sin publicar**: el arreglo de `IconPixmap` de `copiex/tray.py` con
-  `librsvg2-common` en `packaging/deps.txt`, y los requerimientos 15 y 16 en
-  `copiex/engine.py`. El `.deb` de 60 MB no se versiona, y desde el 18/11 tampoco los
-  `__pycache__/*.pyc` (están en `.gitignore`).
+- **Git:** todo publicado hasta **`273ae03`** «Copiex 1.0.1: mover dentro de la misma
+  partición y arreglar el empaquetado» (antes, `26a6873` «Publicar el icono de la bandeja
+  como mapa de bits», `517b76e` «Create LICENSE», `4ab3f99`, `8c58d5a`, `3793477`,
+  `cca1b2c`, `8f7d8eb`, `fc04da6`, `09fb53f` y `ce8d9ee`). El árbol queda **limpio**: ya
+  no hay cambios locales sin publicar. El `.deb` de 127 MB no se versiona, y desde el
+  18/11 tampoco los `__pycache__/*.pyc` (están en `.gitignore`). La **licencia GPL-3.0**
+  (`LICENSE`) entró el 23/11 desde la web de GitHub con `git pull` (3 septvicies).
 - **En marcha:** al retomar, la app **no está arrancada**; se levanta con
   `./copiex-launcher --bandeja` (o se activa sola desde Nautilus). Nautilus tiene la
   extensión instalada idéntica a la fuente.
@@ -99,7 +100,7 @@ La sesión nueva arrancará sabiendo el estado real sin repetir pruebas ya hecha
 - **Pendiente del usuario:** confirmar que en el panel ya se ve la «C» verde. Mover
   carpetas vacías ya funciona (requerimiento 16, 3 sexvicies); mover hacia/desde MTP sigue
   como mejora opcional.
-- **Paquete .deb:** `copiex_1.0.1_amd64.deb` (60 MB) en la raíz, ignorado por Git, y el
+- **Paquete .deb:** `copiex_1.0.1_amd64.deb` (127 MB) en la raíz, ignorado por Git, y el
   empaquetado en `packaging/` (sí versionado); `upgrade.sh` actualiza deps, reconstruye el
   `.deb` y reinstala. Todo está en `ce8d9ee`. Detalles y límites en 3 undevicies y 3 vicies.
 - **Siguiente paso:** si no pide algo nuevo, no rehacer lo ya verificado ni hacer
@@ -1214,6 +1215,34 @@ y en `/dev/shm` (otra):
 reanudación); y mover hacia/desde MTP o a varios destinos sigue copiando, porque ahí no
 hay un único renombrado posible.
 
+## 3 septvicies. Licencia GPL-3.0 (23/11)
+
+El proyecto pasa a ser **GPL-3.0**: el 23/11 el usuario añadió `LICENSE` (674 líneas, GNU
+GPL v3, 29/06/2007) directamente en la web de GitHub, en el commit **`517b76e`** «Create
+LICENSE». Se trajo con `git pull --no-rebase` (fast-forward; el fichero nuevo no chocaba
+con ningún cambio local). `LICENSE` no se versiona con cambios propios: se conserva tal
+cual llegó.
+
+Ese mismo día se publicaron los cambios que quedaban sin push:
+
+- **`26a6873`** «Publicar el icono de la bandeja como mapa de bits»: `copiex/tray.py`
+  (`IconPixmap` como `a(iiay)`, rasterizado en ARGB premultiplicado a 16…64 px) y
+  `librsvg2-common` en `packaging/deps.txt`.
+- **`273ae03`** «Copiex 1.0.1: mover dentro de la misma partición y arreglar el
+  empaquetado»: requerimientos 15 y 16 en `copiex/engine.py`, versión 1.0.1 en
+  `copiex/__init__.py` y el `Dir::State::status "/dev/null"` de `packaging/build-deb.sh`,
+  con `packaging/README.md`, `AGENTS.md`, `NOTES.md` y este `TODO.md`.
+
+Estado tras el `git push` a `repo-copiex/main`: `517b76e..273ae03`, árbol limpio y rama
+al día. Comprobaciones hechas antes de publicar: `py_compile` de `engine.py`, `tray.py` y
+`__init__.py`, `bash -n` de `packaging/build-deb.sh`, `uninstall.sh` y `upgrade.sh`, y
+`git diff --check`.
+
+**Pendiente (mejora, no bloquea):** el `copyright` que genera `packaging/build-deb.sh`
+(línea ~264) dice «Este paquete se distribuye con la misma licencia que el proyecto
+Copiex» sin nombrarla. Conviene poner GPL-3.0 y quizá incluir el `LICENSE` completo en
+`/usr/share/doc/copiex/`.
+
 ## 4. Pendientes, por orden sugerido
 
 No hay trabajo pendiente del pliego. Los requerimientos 15 (tiempo restante) y 16 (mover
@@ -1223,7 +1252,8 @@ menú real de Nautilus
 (cortar a uno y a varios destinos y cambio de idioma); queda confirmar que el icono del
 panel se ve bien en 24.04 (los tres puntos se arreglaron el 19/11 con `IconPixmap`, ver el
 final de 3 quaterdecies), probar el idioma inicial con una instalación real del `.deb` (3
-tervicies) y, si se quiere afinar, mover carpetas vacías y mover hacia/desde MTP.
+tervicies) y, si se quiere afinar, mover carpetas vacías y mover hacia/desde MTP. Como
+mejora opcional, nombrar GPL-3.0 en el `copyright` del `.deb` (3 septvicies).
 
 ## 5. Trampas del entorno (ahorran media hora cada una)
 
@@ -1300,9 +1330,9 @@ tervicies) y, si se quiere afinar, mover carpetas vacías y mover hacia/desde MT
 ## 6. Estado del sistema donde se probó
 
 Ubuntu 26.04 «resolute», GNOME 50.1, Nautilus 50.2.2, GTK 4.22.4, PyGObject 3.56.2,
-Wayland. El 16/11 había un Android montado por MTP (`gvfsd-mtp` y `gvfs-fuse` 1.60). El proyecto **es un repositorio git** (rama `main`; último commit publicado **`4ab3f99`**
-«Anotar el arreglo del icono de la bandeja en la documentación»; remoto `repo-copiex` en
-GitHub). Los commits incluyen el trabajo del 13,
+Wayland. El 16/11 había un Android montado por MTP (`gvfsd-mtp` y `gvfs-fuse` 1.60). El proyecto **es un repositorio git** (rama `main`; último commit publicado **`273ae03`**
+«Copiex 1.0.1: mover dentro de la misma partición y arreglar el empaquetado»; remoto `repo-copiex` en
+GitHub) y su licencia es **GPL-3.0** desde el 23/11 (`LICENSE`, añadido en `517b76e`). Los commits incluyen el trabajo del 13,
 14, 16 y 17/11 (motor de varios destinos, MTP, «Cortar», icono de bandeja, extensión sin
 hilos, `menu.yaml`, `upgrade.sh`, `.gitignore`, la retirada de `install.sh`, el arreglo de
 reanudación y el selector de idioma). El aviso a Nautilus del cambio de idioma va en el

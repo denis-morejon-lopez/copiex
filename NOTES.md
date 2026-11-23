@@ -76,6 +76,13 @@ añadió el requerimiento 16: «Cortar con Copiex» dentro de la misma partició
 renombra (movimiento instantáneo) y deja la copia y borrado para otra partición, MTP,
 varios destinos o un nombre ya ocupado (sección 3 sexvicies de `TODO.md`).
 
+El 23/11 se publicó además lo que quedaba sin push: **`26a6873`** «Publicar el icono de la
+bandeja como mapa de bits» y **`273ae03`** «Copiex 1.0.1: mover dentro de la misma
+partición y arreglar el empaquetado». La **licencia del proyecto es GPL-3.0**: el usuario
+añadió `LICENSE` desde la web de GitHub en **`517b76e`**, entró con `git pull`
+(fast-forward) y ya está en `repo-copiex/main`; el árbol queda limpio (sección
+3 septvicies de `TODO.md`).
+
 Desde el 16/11 hay un instalador `.deb` en la raíz del proyecto
 (`copiex_1.0.1_amd64.deb`, generado con `packaging/build-deb.sh`). Incluye las
 dependencias en un repositorio APT local para instalar sin Internet y, si hay red y

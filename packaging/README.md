@@ -189,3 +189,7 @@ máquina limpia; eso queda pendiente de la prueba del usuario.
   versión de Ubuntu más nueva que la empaquetada apt toma como candidatas las
   versiones instaladas en el equipo y la descarga falla con «No se puede
   encontrar una fuente para descargar la versión …».
+- La licencia del proyecto es **GPL-3.0** (`LICENSE` en la raíz, añadido el 23/11). El
+  `copyright` que escribe `build-deb.sh` en `/usr/share/doc/copiex/copyright` dice «la
+  misma licencia que el proyecto Copiex»; nombrar allí GPL-3.0 y quizá incluir el fichero
+  `LICENSE` completo queda pendiente.
